@@ -225,6 +225,51 @@ body[data-color-scheme="Amber"] {
   background: var(--input-bg);
 }
 
+.account-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.35rem 0.85rem 0.35rem 0.35rem;
+  border: 1px solid var(--input-border);
+  border-radius: 999px;
+  background: var(--surface-card);
+  color: var(--text-strong);
+}
+
+.account-menu-trigger:hover,
+.account-menu-trigger:focus-visible,
+.account-menu-trigger.show {
+  color: var(--text-strong);
+  border-color: rgba(13, 148, 136, 0.24);
+  background: var(--input-bg);
+}
+
+.account-menu-trigger::after {
+  margin-left: 0.35rem;
+}
+
+.account-menu-avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 2.5rem;
+}
+
+.account-menu-role {
+  line-height: 1.1;
+}
+
+.account-menu {
+  min-width: 13rem;
+  padding: 0.5rem;
+  border-radius: 1rem;
+  box-shadow: var(--shadow-card);
+}
+
+.account-menu .dropdown-item {
+  border-radius: 0.75rem;
+  padding: 0.7rem 0.9rem;
+}
+
 .notification-count {
   min-width: 1.15rem;
   height: 1.15rem;
