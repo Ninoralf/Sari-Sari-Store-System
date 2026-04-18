@@ -5,6 +5,7 @@
       <div>
         <h1 class="h5 mb-0" id="mobileSidebarLabel"><%= store.store_name %></h1>
         <div class="mini-note">Management System</div>
+        <div class="mini-note sidebar-date-label mt-1"><%= todayLabel %></div>
       </div>
     </div>
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#mobileSidebar" aria-label="Close menu"></button>
@@ -15,13 +16,16 @@
       <div>
         <h1 class="h5 mb-0"><%= store.store_name %></h1>
         <div class="mini-note">Management System</div>
+        <div class="mini-note sidebar-date-label mt-1"><%= todayLabel %></div>
       </div>
     </div>
     <nav class="nav nav-pills flex-column gap-2">
       <a class="nav-link <%= currentPath === '/' ? 'active' : '' %>" href="/"><i class="bi bi-grid"></i>Dashboard</a>
       <a class="nav-link <%= currentPath.startsWith('/inventory') ? 'active' : '' %>" href="/inventory"><i class="bi bi-box-seam"></i>Inventory</a>
+      <a class="nav-link <%= currentPath.startsWith('/eload') ? 'active' : '' %>" href="/eload"><i class="bi bi-phone"></i>Eload</a>
       <% if (user && user.role === "Admin") { %>
         <a class="nav-link <%= currentPath.startsWith('/sales') ? 'active' : '' %>" href="/sales"><i class="bi bi-cart3"></i>Sales</a>
+        <a class="nav-link <%= currentPath.startsWith('/logs') ? 'active' : '' %>" href="/logs"><i class="bi bi-journal-text"></i>Logs</a>
         <a class="nav-link <%= currentPath.startsWith('/reports') ? 'active' : '' %>" href="/reports"><i class="bi bi-bar-chart-line"></i>Reports</a>
         <a class="nav-link <%= currentPath.startsWith('/best-selling') ? 'active' : '' %>" href="/best-selling"><i class="bi bi-trophy"></i>Best Selling</a>
         <a class="nav-link <%= currentPath.startsWith('/users') ? 'active' : '' %>" href="/users"><i class="bi bi-people"></i>User Accounts</a>

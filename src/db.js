@@ -138,6 +138,46 @@ function createSchema() {
       FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
       FOREIGN KEY (inventory_item_id) REFERENCES inventory_items(id) ON DELETE RESTRICT
     );
+    CREATE TABLE IF NOT EXISTS Products_Log (
+      Log_ID INTEGER PRIMARY KEY AUTOINCREMENT,
+      Transaction_Code TEXT NOT NULL,
+      Total_Amount REAL NOT NULL DEFAULT 0,
+      Emp_Mng TEXT NOT NULL DEFAULT '',
+      Sale_Date TEXT NOT NULL,
+      Time_Stamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS Selling_Log_Items (
+      Log_Item_ID INTEGER PRIMARY KEY AUTOINCREMENT,
+      Log_ID INTEGER NOT NULL,
+      Product_ID INTEGER NOT NULL,
+      Item_Name TEXT NOT NULL DEFAULT '',
+      Quantity INTEGER NOT NULL DEFAULT 0,
+      Selling_Price REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (Log_ID) REFERENCES Products_Log(Log_ID) ON DELETE CASCADE,
+      FOREIGN KEY (Product_ID) REFERENCES inventory_items(id) ON DELETE RESTRICT
+    );
+    CREATE TABLE IF NOT EXISTS GCash_Log (
+      Log_ID INTEGER PRIMARY KEY AUTOINCREMENT,
+      Transaction_Code TEXT NOT NULL,
+      Number TEXT NOT NULL DEFAULT '',
+      Reference_No TEXT NOT NULL DEFAULT '',
+      Cash_IN_OUT TEXT NOT NULL DEFAULT 'IN',
+      Amount REAL NOT NULL DEFAULT 0,
+      Emp_Mng TEXT NOT NULL DEFAULT '',
+      Sale_Date TEXT NOT NULL,
+      Time_Stamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS ELoad_Log (
+      Log_ID INTEGER PRIMARY KEY AUTOINCREMENT,
+      Transaction_Code TEXT NOT NULL,
+      Number TEXT NOT NULL DEFAULT '',
+      Network TEXT NOT NULL DEFAULT '',
+      Item_Name TEXT NOT NULL DEFAULT '',
+      Amount REAL NOT NULL DEFAULT 0,
+      Emp_Mng TEXT NOT NULL DEFAULT '',
+      Sale_Date TEXT NOT NULL,
+      Time_Stamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
     CREATE TABLE IF NOT EXISTS store_settings (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       store_name TEXT NOT NULL,
@@ -178,10 +218,14 @@ function ensureInventorySchema() {
   }
 }
 
-export function createSale({ saleDate, paymentMethod, items, skipStockValidation = false }) {
+export function createSale({ saleDate, paymentMethod, items, skipStockValidation = false, employeeName = "System", number = "", referenceNo = "" }) {
   const insertSale = db.prepare(`INSERT INTO sales (transaction_code, sale_date, payment_method, total_amount) VALUES (?, ?, ?, ?)`);
   const insertSaleItem = db.prepare(`INSERT INTO sale_items (sale_id, inventory_item_id, item_name, quantity, price, total) VALUES (?, ?, ?, ?, ?, ?)`);
   const updateStock = db.prepare(`UPDATE inventory_items SET stock_quantity = stock_quantity - ? WHERE id = ?`);
+  const insertProductsLog = db.prepare(`INSERT INTO Products_Log (Transaction_Code, Total_Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?)`);
+  const insertSellingLogItem = db.prepare(`INSERT INTO Selling_Log_Items (Log_ID, Product_ID, Item_Name, Quantity, Selling_Price) VALUES (?, ?, ?, ?, ?)`);
+  const insertGcashLog = db.prepare(`INSERT INTO GCash_Log (Transaction_Code, Number, Reference_No, Cash_IN_OUT, Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+  const insertEloadLog = db.prepare(`INSERT INTO ELoad_Log (Transaction_Code, Number, Network, Item_Name, Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?, ?, ?, ?)`);
 
   const createTx = withTransaction((payload) => {
     const totalAmount = payload.items.reduce((sum, item) => sum + item.total, 0);
@@ -189,19 +233,117 @@ export function createSale({ saleDate, paymentMethod, items, skipStockValidation
     const transactionCode = `S${String(saleCount).padStart(4, "0")}`;
     const saleResult = insertSale.run(transactionCode, payload.saleDate, payload.paymentMethod, totalAmount);
     const saleId = saleResult.lastInsertRowid;
+    const activeEmployeeName = String(payload.employeeName || "System");
+    const productItems = [];
+    const eloadItems = [];
 
     for (const item of payload.items) {
-      const currentInventory = db.prepare("SELECT id, name, stock_quantity FROM inventory_items WHERE id = ?").get(item.inventoryItemId);
+      const currentInventory = db.prepare("SELECT id, name, category, stock_quantity FROM inventory_items WHERE id = ?").get(item.inventoryItemId);
       if (!currentInventory) throw new Error("One of the sale items does not exist.");
       if (!skipStockValidation && currentInventory.stock_quantity < item.quantity) {
         throw new Error(`Not enough stock for ${currentInventory.name}.`);
       }
       insertSaleItem.run(saleId, item.inventoryItemId, currentInventory.name, item.quantity, item.price, item.total);
       updateStock.run(item.quantity, item.inventoryItemId);
+
+      const category = String(currentInventory.category || "").toLowerCase();
+      const normalizedItem = {
+        inventoryItemId: currentInventory.id,
+        itemName: currentInventory.name,
+        category: currentInventory.category,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total
+      };
+
+      if (category.includes("load")) {
+        eloadItems.push(normalizedItem);
+      } else {
+        productItems.push(normalizedItem);
+      }
+    }
+
+    if (productItems.length) {
+      const productTotal = productItems.reduce((sum, item) => sum + Number(item.total || 0), 0);
+      const productLogResult = insertProductsLog.run(transactionCode, productTotal, activeEmployeeName, payload.saleDate);
+      for (const item of productItems) {
+        insertSellingLogItem.run(productLogResult.lastInsertRowid, item.inventoryItemId, item.itemName, item.quantity, item.price);
+      }
+    }
+
+    if (String(payload.paymentMethod || "").toLowerCase() === "gcash") {
+      insertGcashLog.run(transactionCode, String(payload.number || ""), String(payload.referenceNo || ""), "IN", totalAmount, activeEmployeeName, payload.saleDate);
+    }
+
+    for (const item of eloadItems) {
+      insertEloadLog.run(
+        transactionCode,
+        String(payload.number || ""),
+        String(item.category || item.itemName || ""),
+        item.itemName,
+        item.total,
+        activeEmployeeName,
+        payload.saleDate
+      );
     }
   });
 
-  createTx({ saleDate, paymentMethod, items });
+  createTx({ saleDate, paymentMethod, items, employeeName, number, referenceNo });
+}
+
+function backfillLogTablesFromSales() {
+  const hasProductLogs = db.prepare("SELECT COUNT(*) AS count FROM Products_Log").get().count > 0;
+  const hasGcashLogs = db.prepare("SELECT COUNT(*) AS count FROM GCash_Log").get().count > 0;
+  const hasEloadLogs = db.prepare("SELECT COUNT(*) AS count FROM ELoad_Log").get().count > 0;
+  if (hasProductLogs || hasGcashLogs || hasEloadLogs) return;
+
+  const sales = listSales("all");
+  const insertProductsLog = db.prepare(`INSERT INTO Products_Log (Transaction_Code, Total_Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?)`);
+  const insertSellingLogItem = db.prepare(`INSERT INTO Selling_Log_Items (Log_ID, Product_ID, Item_Name, Quantity, Selling_Price) VALUES (?, ?, ?, ?, ?)`);
+  const insertGcashLog = db.prepare(`INSERT INTO GCash_Log (Transaction_Code, Number, Reference_No, Cash_IN_OUT, Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+  const insertEloadLog = db.prepare(`INSERT INTO ELoad_Log (Transaction_Code, Number, Network, Item_Name, Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+
+  withTransaction(() => {
+    sales.forEach((sale) => {
+      const productItems = [];
+      const eloadItems = [];
+
+      sale.items.forEach((item) => {
+        const inventoryItem = db.prepare("SELECT id, category FROM inventory_items WHERE id = ?").get(item.inventory_item_id);
+        const category = String(inventoryItem?.category || "").toLowerCase();
+        const normalizedItem = {
+          inventoryItemId: Number(item.inventory_item_id),
+          itemName: item.item_name,
+          category: inventoryItem?.category || "",
+          quantity: Number(item.quantity || 0),
+          price: Number(item.price || 0),
+          total: Number(item.total || 0)
+        };
+
+        if (category.includes("load")) {
+          eloadItems.push(normalizedItem);
+        } else {
+          productItems.push(normalizedItem);
+        }
+      });
+
+      if (productItems.length) {
+        const productTotal = productItems.reduce((sum, item) => sum + item.total, 0);
+        const productLogResult = insertProductsLog.run(sale.transaction_code, productTotal, "System", sale.sale_date);
+        productItems.forEach((item) => {
+          insertSellingLogItem.run(productLogResult.lastInsertRowid, item.inventoryItemId, item.itemName, item.quantity, item.price);
+        });
+      }
+
+      if (String(sale.payment_method || "").toLowerCase() === "gcash") {
+        insertGcashLog.run(sale.transaction_code, "", "", "IN", Number(sale.total_amount || 0), "System", sale.sale_date);
+      }
+
+      eloadItems.forEach((item) => {
+        insertEloadLog.run(sale.transaction_code, "", String(item.category || item.itemName || ""), item.itemName, item.total, "System", sale.sale_date);
+      });
+    });
+  })();
 }
 
 function seedDefaults() {
@@ -250,6 +392,7 @@ export function initializeDatabase() {
   ensureUserSchema();
   ensureInventorySchema();
   seedDefaults();
+  backfillLogTablesFromSales();
 }
 
 export function getUserByUsername(username) {
@@ -591,6 +734,114 @@ export function getBestSellingData() {
     topItem: items[0] || null,
     totalUnitsSold: items.reduce((sum, item) => sum + item.quantity_sold, 0),
     totalRevenue: items.reduce((sum, item) => sum + item.revenue, 0)
+  };
+}
+
+export function getLogsData(dateKey = toIsoDate(getTodayDate())) {
+  const selectedDate = String(dateKey || toIsoDate(getTodayDate()));
+  const productLogs = db.prepare(`
+    SELECT
+      Products_Log.Log_ID AS logId,
+      Products_Log.Transaction_Code AS transactionCode,
+      Products_Log.Sale_Date AS date,
+      Products_Log.Total_Amount AS totalAmount,
+      Products_Log.Emp_Mng AS employee,
+      Products_Log.Time_Stamp AS timeStamp
+    FROM Products_Log
+    WHERE Products_Log.Sale_Date = ?
+    ORDER BY Products_Log.Time_Stamp DESC, Products_Log.Log_ID DESC
+  `).all(selectedDate).map((row) => {
+    const items = db.prepare(`
+      SELECT
+        Log_Item_ID AS logItemId,
+        Product_ID AS productId,
+        Item_Name AS itemName,
+        Quantity AS quantity,
+        Selling_Price AS sellingPrice
+      FROM Selling_Log_Items
+      WHERE Log_ID = ?
+      ORDER BY Log_Item_ID ASC
+    `).all(row.logId).map((item) => ({
+      ...item,
+      quantity: Number(item.quantity || 0),
+      sellingPrice: Number(item.sellingPrice || 0),
+      amount: Number(item.quantity || 0) * Number(item.sellingPrice || 0)
+    }));
+
+    return {
+      ...row,
+      totalAmount: Number(row.totalAmount || 0),
+      items
+    };
+  });
+
+  const eloadLogs = db.prepare(`
+    SELECT
+      Transaction_Code AS transactionCode,
+      Sale_Date AS date,
+      Item_Name AS itemName,
+      Network AS network,
+      Number AS number,
+      Amount AS amount,
+      Emp_Mng AS employee
+    FROM ELoad_Log
+    WHERE Sale_Date = ?
+    ORDER BY Time_Stamp DESC, Log_ID DESC
+  `).all(selectedDate).map((row) => ({
+    ...row,
+    amount: Number(row.amount || 0),
+    paymentMethod: "Eload"
+  }));
+
+  const gcashLogs = db.prepare(`
+    SELECT
+      GCash_Log.Transaction_Code AS transactionCode,
+      GCash_Log.Sale_Date AS date,
+      GCash_Log.Amount AS totalAmount,
+      GCash_Log.Number AS number,
+      GCash_Log.Reference_No AS referenceNo,
+      GCash_Log.Cash_IN_OUT AS cashInOut,
+      GCash_Log.Emp_Mng AS employee,
+      COALESCE(sales.total_amount, GCash_Log.Amount) AS saleTotal,
+      COALESCE((SELECT COUNT(*) FROM sale_items JOIN sales AS sale_ref ON sale_ref.id = sale_items.sale_id WHERE sale_ref.transaction_code = GCash_Log.Transaction_Code), 0) AS itemCount
+    FROM GCash_Log
+    LEFT JOIN sales ON sales.transaction_code = GCash_Log.Transaction_Code
+    WHERE GCash_Log.Sale_Date = ?
+    ORDER BY GCash_Log.Time_Stamp DESC, GCash_Log.Log_ID DESC
+  `).all(selectedDate).map((row) => {
+    const productTotal = db.prepare(`
+      SELECT COALESCE(SUM(Selling_Log_Items.Selling_Price * Selling_Log_Items.Quantity), 0) AS total
+      FROM Products_Log
+      JOIN Selling_Log_Items ON Selling_Log_Items.Log_ID = Products_Log.Log_ID
+      WHERE Products_Log.Transaction_Code = ?
+    `).get(row.transactionCode).total;
+    const eloadTotal = db.prepare(`
+      SELECT COALESCE(SUM(Amount), 0) AS total
+      FROM ELoad_Log
+      WHERE Transaction_Code = ?
+    `).get(row.transactionCode).total;
+    return {
+      ...row,
+      itemCount: Number(row.itemCount || 0),
+      productTotal: Number(productTotal || 0),
+      eloadTotal: Number(eloadTotal || 0),
+      totalAmount: Number(row.totalAmount || 0)
+    };
+  });
+
+  return {
+    selectedDate,
+      summary: {
+        productCount: productLogs.length,
+        productTotal: productLogs.reduce((sum, entry) => sum + entry.totalAmount, 0),
+        eloadCount: eloadLogs.length,
+        eloadTotal: eloadLogs.reduce((sum, entry) => sum + entry.amount, 0),
+        gcashCount: gcashLogs.length,
+      gcashTotal: gcashLogs.reduce((sum, entry) => sum + entry.totalAmount, 0)
+    },
+    productLogs,
+    eloadLogs,
+    gcashLogs
   };
 }
 

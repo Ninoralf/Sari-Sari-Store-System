@@ -177,6 +177,12 @@ body[data-color-scheme="Amber"] {
   color: var(--text-strong);
 }
 
+.sidebar-date-label {
+  display: block;
+  max-width: 14rem;
+  line-height: 1.35;
+}
+
 .brand-chip, .icon-chip {
   width: 3rem;
   height: 3rem;
@@ -609,6 +615,44 @@ body[data-color-scheme="Amber"] {
 .dashboard-alert-link:hover {
   transform: translateY(-2px);
   box-shadow: 0 0.75rem 1.8rem rgba(245, 158, 11, 0.12);
+}
+
+.eload-network-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.85rem;
+}
+
+.eload-network-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  text-align: left;
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1px solid var(--input-border);
+  background: var(--surface-card);
+  color: var(--text-strong);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.eload-network-card:hover,
+.eload-network-card:focus-visible {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--brand-emerald) 45%, var(--input-border));
+  box-shadow: var(--shadow-hover);
+  background: color-mix(in srgb, var(--surface-soft) 80%, var(--surface-card));
+}
+
+.eload-network-card.is-selected {
+  border-color: color-mix(in srgb, var(--brand-emerald) 65%, white);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand-emerald) 12%, transparent), color-mix(in srgb, var(--brand-teal) 10%, transparent));
+  box-shadow: var(--shadow-card);
+}
+
+.eload-preview {
+  border: 1px solid color-mix(in srgb, var(--brand-emerald) 22%, var(--input-border));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand-emerald) 10%, transparent), color-mix(in srgb, var(--brand-cyan) 7%, transparent)), var(--surface-card);
 }
 
 .section-title { font-size: 1.1rem; font-weight: 700; }

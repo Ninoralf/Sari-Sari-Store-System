@@ -14,6 +14,7 @@ import {
   getDashboardData,
   getDashboardChartData,
   getDatabasePath,
+  getLogsData,
   getQuickSaleRecommendations,
   getReportsData,
   getSalesMetrics,
@@ -345,8 +346,14 @@ app.get("/api/sales/metrics", requireApiAuth, requireAdminApi, (req, res) => {
   return res.json(getSalesMetrics());
 });
 
+app.get("/api/logs", requireApiAuth, requireAdminApi, (req, res) => {
+  const date = String(req.query.date || isoDateToday());
+  return res.json(getLogsData(date));
+});
+
 app.post("/api/sales", requireApiAuth, requireAdminApi, (req, res) => {
   try {
+    const currentUser = getUserById(req.session.user.id);
     const items = Array.isArray(req.body.items) ? req.body.items : [];
     const normalizedItems = items.map((item) => ({
       inventoryItemId: Number(item.inventoryItemId),
@@ -362,7 +369,8 @@ app.post("/api/sales", requireApiAuth, requireAdminApi, (req, res) => {
     createSale({
       saleDate: req.body.saleDate || isoDateToday(),
       paymentMethod: req.body.paymentMethod,
-      items: normalizedItems
+      items: normalizedItems,
+      employeeName: currentUser?.full_name || currentUser?.username || "System"
     });
 
     return res.json({
@@ -421,6 +429,13 @@ app.get("/inventory", requireAuth, (req, res) => {
   });
 });
 
+app.get("/eload", requireAuth, (req, res) => {
+  res.render("eload", {
+    pageTitle: "Eload",
+    todayLabel: todayLabel()
+  });
+});
+
 app.post("/inventory/add", requireAuth, requireAdmin, (req, res) => {
   try {
     addInventoryItem(req.body);
@@ -469,6 +484,7 @@ app.get("/sales", requireAuth, requireAdmin, (req, res) => {
 
 app.post("/sales/add", requireAuth, requireAdmin, (req, res) => {
   try {
+    const currentUser = getUserById(req.session.user.id);
     const ids = Array.isArray(req.body.itemId) ? req.body.itemId : [req.body.itemId];
     const quantities = Array.isArray(req.body.quantity) ? req.body.quantity : [req.body.quantity];
     const prices = Array.isArray(req.body.price) ? req.body.price : [req.body.price];
@@ -480,7 +496,12 @@ app.post("/sales/add", requireAuth, requireAdmin, (req, res) => {
     })).filter((item) => item.inventoryItemId && item.quantity > 0);
 
     if (!items.length) throw new Error("Add at least one item to the sale.");
-    createSale({ saleDate: req.body.saleDate || isoDateToday(), paymentMethod: req.body.paymentMethod, items });
+    createSale({
+      saleDate: req.body.saleDate || isoDateToday(),
+      paymentMethod: req.body.paymentMethod,
+      items,
+      employeeName: currentUser?.full_name || currentUser?.username || "System"
+    });
     setFlash(req, "success", "Sale recorded successfully.");
   } catch (error) {
     setFlash(req, "danger", error.message);
@@ -490,6 +511,17 @@ app.post("/sales/add", requireAuth, requireAdmin, (req, res) => {
 
 app.get("/reports", requireAuth, requireAdmin, (req, res) => {
   res.render("reports", { pageTitle: "Reports", todayLabel: todayLabel(), reports: getReportsData(), formatCurrency });
+});
+
+app.get("/logs", requireAuth, requireAdmin, (req, res) => {
+  const selectedDate = String(req.query.date || isoDateToday());
+  res.render("logs", {
+    pageTitle: "Logs",
+    todayLabel: todayLabel(),
+    selectedDate,
+    logs: getLogsData(selectedDate),
+    formatCurrency
+  });
 });
 
 app.get("/best-selling", requireAuth, requireAdmin, (req, res) => {

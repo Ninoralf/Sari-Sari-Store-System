@@ -6,13 +6,6 @@
     <section class="p-3 p-lg-4">
       <%- include("partials/flash") %>
       <div id="salesLiveAlert"></div>
-      <div class="row g-4 mb-4">
-        <div class="col-md-6 col-xl-3"><div class="metric-card p-4"><div class="mini-note">Today's Sales</div><div class="h2 fw-bold" id="salesMetricTodayTotal"><%= formatCurrency(metrics.todayTotal) %></div><div class="mini-note"><span id="salesMetricTodayTransactions"><%= metrics.todayTransactions %></span> transactions</div></div></div>
-        <div class="col-md-6 col-xl-3"><div class="metric-card p-4"><div class="mini-note">Items Sold Today</div><div class="h2 fw-bold" id="salesMetricTodayItems"><%= metrics.todayItems %></div><div class="mini-note">units</div></div></div>
-        <div class="col-md-6 col-xl-3"><div class="metric-card p-4"><div class="mini-note">Weekly Sales</div><div class="h2 fw-bold" id="salesMetricWeeklyTotal"><%= formatCurrency(metrics.weeklyTotal) %></div><div class="mini-note">Last 7 days</div></div></div>
-        <div class="col-md-6 col-xl-3"><div class="metric-card p-4"><div class="mini-note">Monthly Sales</div><div class="h2 fw-bold" id="salesMetricMonthlyTotal"><%= formatCurrency(metrics.monthlyTotal) %></div><div class="mini-note">Last 30 days</div></div></div>
-      </div>
-
       <div class="content-card p-4">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
           <div>
@@ -251,11 +244,6 @@
   const salesFilterButtons = [...document.querySelectorAll("[data-sales-filter]")];
   const quickQtyAdjustButtons = [...document.querySelectorAll(".quick-qty-adjust")];
   const salesLiveAlert = document.getElementById("salesLiveAlert");
-  const salesMetricTodayTotal = document.getElementById("salesMetricTodayTotal");
-  const salesMetricTodayTransactions = document.getElementById("salesMetricTodayTransactions");
-  const salesMetricTodayItems = document.getElementById("salesMetricTodayItems");
-  const salesMetricWeeklyTotal = document.getElementById("salesMetricWeeklyTotal");
-  const salesMetricMonthlyTotal = document.getElementById("salesMetricMonthlyTotal");
   const quickPicksToday = document.getElementById("quickPicksToday");
   const quickPicksWeek = document.getElementById("quickPicksWeek");
   const quickPicksSmart = document.getElementById("quickPicksSmart");
@@ -496,11 +484,7 @@
   }
 
   function updateSalesMetrics(metrics) {
-    salesMetricTodayTotal.textContent = peso.format(metrics.todayTotal);
-    salesMetricTodayTransactions.textContent = String(metrics.todayTransactions);
-    salesMetricTodayItems.textContent = String(metrics.todayItems);
-    salesMetricWeeklyTotal.textContent = peso.format(metrics.weeklyTotal);
-    salesMetricMonthlyTotal.textContent = peso.format(metrics.monthlyTotal);
+    return metrics;
   }
 
   async function refreshSalesRecommendations() {
