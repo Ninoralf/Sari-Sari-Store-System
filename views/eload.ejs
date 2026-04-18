@@ -6,117 +6,185 @@
     <section class="p-3 p-lg-4">
       <%- include("partials/flash") %>
       <div class="row g-4">
-        <div class="col-xl-8">
+        <div class="col-12">
           <div class="content-card p-4">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
               <div>
-                <div class="section-title">Mobile Eload</div>
-                <div class="mini-note">Enter a Philippine number, choose the network, then select promo, regular load, or a GCash exclusive offer.</div>
+                <div class="section-title">Digital Services</div>
+                <div class="mini-note">Choose whether you want to process a mobile eload or continue to a GCash transaction card.</div>
               </div>
               <span class="badge rounded-pill text-bg-light border px-3 py-2">Demo form</span>
             </div>
 
-            <form id="eloadForm" class="row g-4" autocomplete="off">
-              <div class="col-12">
-                <label class="form-label" for="eloadMobileNumber">Mobile Number</label>
-                <input
-                  class="form-control form-control-lg"
-                  id="eloadMobileNumber"
-                  inputmode="numeric"
-                  maxlength="13"
-                  placeholder="09XX XXX XXXX"
-                  aria-describedby="eloadMobileHelp"
-                >
-                <div class="mini-note mt-2" id="eloadMobileHelp">Accepted format: 11-digit Philippine mobile number starting with `09`.</div>
-              </div>
+            <div class="eload-service-grid mb-4" id="eloadServiceGrid">
+              <button type="button" class="eload-service-card is-selected" data-service="eload">
+                <span class="fw-semibold fs-5">Eload</span>
+                <span class="mini-note">Go to mobile load options with network and promo selection.</span>
+              </button>
+              <button type="button" class="eload-service-card" data-service="gcash">
+                <span class="fw-semibold fs-5">GCash</span>
+                <span class="mini-note">Open the GCash card where you can fill in number, reference, and amount.</span>
+              </button>
+            </div>
 
-              <div class="col-12">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <label class="form-label mb-0">Choose Network</label>
-                  <div class="mini-note" id="eloadSelectedNetworkText">No network selected yet</div>
-                </div>
-                <div class="eload-network-grid" id="eloadNetworkGrid"></div>
-              </div>
-
-              <div class="col-12">
-                <div class="d-flex flex-wrap gap-2 mb-3">
-                  <input class="btn-check" type="radio" name="loadType" id="eloadTypePromo" value="promo" checked>
-                  <label class="btn btn-outline-secondary rounded-pill px-4" for="eloadTypePromo">Promo Load</label>
-
-                  <input class="btn-check" type="radio" name="loadType" id="eloadTypeRegular" value="regular">
-                  <label class="btn btn-outline-secondary rounded-pill px-4" for="eloadTypeRegular">Regular Load</label>
-
-                  <input class="btn-check" type="radio" name="loadType" id="eloadTypeGcash" value="gcash">
-                  <label class="btn btn-outline-secondary rounded-pill px-4" for="eloadTypeGcash">GCash Exclusive</label>
+            <div id="eloadFlowCard">
+              <form id="eloadForm" class="row g-4" autocomplete="off">
+                <div class="col-12">
+                  <label class="form-label" for="eloadMobileNumber">Mobile Number</label>
+                  <input
+                    class="form-control form-control-lg"
+                    id="eloadMobileNumber"
+                    inputmode="numeric"
+                    maxlength="13"
+                    placeholder="09XX XXX XXXX"
+                    aria-describedby="eloadMobileHelp"
+                  >
+                  <div class="mini-note mt-2" id="eloadMobileHelp">Accepted format: 11-digit Philippine mobile number starting with `09`.</div>
                 </div>
 
-                <div class="row g-4">
-                  <div class="col-lg-7" id="eloadPromoSection">
-                    <label class="form-label" for="eloadPromoSelect">Promo Option</label>
-                    <select class="form-select" id="eloadPromoSelect"></select>
-                    <div class="mini-note mt-2" id="eloadPromoHelp">Choose a network first to see available promos.</div>
+                <div class="col-12">
+                  <div class="d-flex justify-content-between align-items-center mb-3">
+                    <label class="form-label mb-0">Choose Network</label>
+                    <div class="mini-note" id="eloadSelectedNetworkText">No network selected yet</div>
+                  </div>
+                  <div class="eload-network-grid" id="eloadNetworkGrid"></div>
+                </div>
+
+                <div class="col-12">
+                  <div class="d-flex flex-wrap gap-2 mb-3">
+                    <input class="btn-check" type="radio" name="loadType" id="eloadTypePromo" value="promo" checked>
+                    <label class="btn btn-outline-secondary rounded-pill px-4" for="eloadTypePromo">Promo Load</label>
+
+                    <input class="btn-check" type="radio" name="loadType" id="eloadTypeRegular" value="regular">
+                    <label class="btn btn-outline-secondary rounded-pill px-4" for="eloadTypeRegular">Regular Load</label>
+
+                    <input class="btn-check" type="radio" name="loadType" id="eloadTypeGcash" value="gcash">
+                    <label class="btn btn-outline-secondary rounded-pill px-4" for="eloadTypeGcash">GCash Exclusive</label>
                   </div>
 
-                  <div class="col-lg-5 d-none" id="eloadRegularSection">
-                    <label class="form-label" for="eloadRegularAmount">Regular Amount</label>
-                    <div class="input-group">
-                      <span class="input-group-text">PHP</span>
-                      <input class="form-control" id="eloadRegularAmount" type="number" min="1" step="1" placeholder="50">
+                  <div class="row g-4">
+                    <div class="col-lg-7" id="eloadPromoSection">
+                      <label class="form-label" for="eloadPromoSelect">Promo Option</label>
+                      <select class="form-select" id="eloadPromoSelect"></select>
+                      <div class="mini-note mt-2" id="eloadPromoHelp">Choose a network first to see available promos.</div>
                     </div>
-                    <div class="mini-note mt-2">Enter any whole-number load amount.</div>
-                  </div>
 
-                  <div class="col-lg-7 d-none" id="eloadGcashSection">
-                    <label class="form-label" for="eloadGcashSelect">GCash Exclusive Option</label>
-                    <select class="form-select" id="eloadGcashSelect">
-                      <option value="GCash Exclusive 50">GCash Exclusive 50</option>
-                      <option value="GCash Exclusive 99">GCash Exclusive 99</option>
-                      <option value="GCash Exclusive 150">GCash Exclusive 150</option>
-                      <option value="GCash Exclusive 299">GCash Exclusive 299</option>
+                    <div class="col-lg-5 d-none" id="eloadRegularSection">
+                      <label class="form-label" for="eloadRegularAmount">Regular Amount</label>
+                      <div class="input-group">
+                        <span class="input-group-text">PHP</span>
+                        <input class="form-control" id="eloadRegularAmount" type="number" min="1" step="1" placeholder="50">
+                      </div>
+                      <div class="mini-note mt-2">Enter any whole-number load amount.</div>
+                    </div>
+
+                    <div class="col-lg-7 d-none" id="eloadGcashSection">
+                      <label class="form-label" for="eloadGcashSelect">GCash Exclusive Option</label>
+                      <select class="form-select" id="eloadGcashSelect">
+                        <option value="GCash Exclusive 50">GCash Exclusive 50</option>
+                        <option value="GCash Exclusive 99">GCash Exclusive 99</option>
+                        <option value="GCash Exclusive 150">GCash Exclusive 150</option>
+                        <option value="GCash Exclusive 299">GCash Exclusive 299</option>
+                      </select>
+                      <div class="mini-note mt-2">Special GCash-only offers for digital wallet load purchases.</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <div class="eload-preview p-4 rounded-4">
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                      <div>
+                        <div class="mini-note">Transaction Preview</div>
+                        <div class="h4 mb-1" id="eloadPreviewTitle">Ready to prepare load</div>
+                        <div class="mini-note" id="eloadPreviewSubtitle">Complete the fields to preview the selected load.</div>
+                      </div>
+                      <div class="badge rounded-pill text-bg-success px-3 py-2" id="eloadPreviewMode">Promo</div>
+                    </div>
+                    <div class="row g-3 mt-1">
+                      <div class="col-md-4">
+                        <div class="mini-note">Number</div>
+                        <div class="fw-semibold" id="eloadPreviewNumber">09XX XXX XXXX</div>
+                      </div>
+                      <div class="col-md-4">
+                        <div class="mini-note">Network</div>
+                        <div class="fw-semibold" id="eloadPreviewNetwork">Select network</div>
+                      </div>
+                      <div class="col-md-4">
+                        <div class="mini-note">Selected Load</div>
+                        <div class="fw-semibold" id="eloadPreviewValue">Choose an option</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <button class="btn btn-success px-4" type="submit">Prepare Eload</button>
+                </div>
+              </form>
+            </div>
+
+            <div id="gcashFlowCard" class="d-none">
+              <div class="content-card border-0 shadow-none p-0">
+                <div class="section-title mb-2">GCash Card</div>
+                <div class="mini-note mb-4">Fill in the GCash transaction details below before proceeding.</div>
+
+                <form id="gcashForm" class="row g-4" autocomplete="off">
+                  <div class="col-md-6">
+                    <label class="form-label" for="gcashMobileNumber">GCash Number</label>
+                    <input class="form-control form-control-lg" id="gcashMobileNumber" inputmode="numeric" maxlength="13" placeholder="09XX XXX XXXX">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label" for="gcashReferenceNumber">Reference Number</label>
+                    <input class="form-control form-control-lg" id="gcashReferenceNumber" placeholder="Enter reference no.">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label" for="gcashCashFlow">Cash Flow</label>
+                    <select class="form-select form-select-lg" id="gcashCashFlow">
+                      <option value="Cash In">Cash In</option>
+                      <option value="Cash Out">Cash Out</option>
                     </select>
-                    <div class="mini-note mt-2">Special GCash-only offers for digital wallet load purchases.</div>
                   </div>
-                </div>
-              </div>
-
-              <div class="col-12">
-                <div class="eload-preview p-4 rounded-4">
-                  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
-                    <div>
-                      <div class="mini-note">Transaction Preview</div>
-                      <div class="h4 mb-1" id="eloadPreviewTitle">Ready to prepare load</div>
-                      <div class="mini-note" id="eloadPreviewSubtitle">Complete the fields to preview the selected load.</div>
-                    </div>
-                    <div class="badge rounded-pill text-bg-success px-3 py-2" id="eloadPreviewMode">Promo</div>
-                  </div>
-                  <div class="row g-3 mt-1">
-                    <div class="col-md-4">
-                      <div class="mini-note">Number</div>
-                      <div class="fw-semibold" id="eloadPreviewNumber">09XX XXX XXXX</div>
-                    </div>
-                    <div class="col-md-4">
-                      <div class="mini-note">Network</div>
-                      <div class="fw-semibold" id="eloadPreviewNetwork">Select network</div>
-                    </div>
-                    <div class="col-md-4">
-                      <div class="mini-note">Selected Load</div>
-                      <div class="fw-semibold" id="eloadPreviewValue">Choose an option</div>
+                  <div class="col-md-6">
+                    <label class="form-label" for="gcashAmount">Amount</label>
+                    <div class="input-group input-group-lg">
+                      <span class="input-group-text">PHP</span>
+                      <input class="form-control" id="gcashAmount" type="number" min="1" step="1" placeholder="100">
                     </div>
                   </div>
-                </div>
-              </div>
 
-              <div class="col-12">
-                <button class="btn btn-success px-4" type="submit">Prepare Eload</button>
-              </div>
-            </form>
-          </div>
-        </div>
+                  <div class="col-12">
+                    <div class="eload-preview p-4 rounded-4">
+                      <div class="mini-note">GCash Preview</div>
+                      <div class="h4 mb-1" id="gcashPreviewTitle">Ready to prepare GCash transaction</div>
+                      <div class="mini-note mb-3" id="gcashPreviewSubtitle">Complete the fields to preview the transaction details.</div>
+                      <div class="row g-3">
+                        <div class="col-md-3">
+                          <div class="mini-note">Number</div>
+                          <div class="fw-semibold" id="gcashPreviewNumber">09XX XXX XXXX</div>
+                        </div>
+                        <div class="col-md-3">
+                          <div class="mini-note">Reference</div>
+                          <div class="fw-semibold" id="gcashPreviewReference">Pending</div>
+                        </div>
+                        <div class="col-md-3">
+                          <div class="mini-note">Flow</div>
+                          <div class="fw-semibold" id="gcashPreviewFlow">Cash In</div>
+                        </div>
+                        <div class="col-md-3">
+                          <div class="mini-note">Amount</div>
+                          <div class="fw-semibold" id="gcashPreviewAmount">PHP 0</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
-        <div class="col-xl-4">
-          <div class="content-card p-4 h-100">
-            <div class="section-title mb-3">Network Promo Guide</div>
-            <div class="vstack gap-3" id="eloadPromoGuide"></div>
+                  <div class="col-12">
+                    <button class="btn btn-success px-4" type="submit">Prepare GCash</button>
+                  </div>
+                </form>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -144,12 +212,15 @@
   };
 
   const eloadForm = document.getElementById("eloadForm");
+  const gcashForm = document.getElementById("gcashForm");
+  const eloadServiceGrid = document.getElementById("eloadServiceGrid");
+  const eloadFlowCard = document.getElementById("eloadFlowCard");
+  const gcashFlowCard = document.getElementById("gcashFlowCard");
   const eloadMobileNumber = document.getElementById("eloadMobileNumber");
   const eloadNetworkGrid = document.getElementById("eloadNetworkGrid");
   const eloadSelectedNetworkText = document.getElementById("eloadSelectedNetworkText");
   const eloadPromoSelect = document.getElementById("eloadPromoSelect");
   const eloadPromoHelp = document.getElementById("eloadPromoHelp");
-  const eloadPromoGuide = document.getElementById("eloadPromoGuide");
   const eloadPromoSection = document.getElementById("eloadPromoSection");
   const eloadRegularSection = document.getElementById("eloadRegularSection");
   const eloadGcashSection = document.getElementById("eloadGcashSection");
@@ -161,9 +232,20 @@
   const eloadPreviewNumber = document.getElementById("eloadPreviewNumber");
   const eloadPreviewNetwork = document.getElementById("eloadPreviewNetwork");
   const eloadPreviewValue = document.getElementById("eloadPreviewValue");
+  const gcashMobileNumber = document.getElementById("gcashMobileNumber");
+  const gcashReferenceNumber = document.getElementById("gcashReferenceNumber");
+  const gcashCashFlow = document.getElementById("gcashCashFlow");
+  const gcashAmount = document.getElementById("gcashAmount");
+  const gcashPreviewTitle = document.getElementById("gcashPreviewTitle");
+  const gcashPreviewSubtitle = document.getElementById("gcashPreviewSubtitle");
+  const gcashPreviewNumber = document.getElementById("gcashPreviewNumber");
+  const gcashPreviewReference = document.getElementById("gcashPreviewReference");
+  const gcashPreviewFlow = document.getElementById("gcashPreviewFlow");
+  const gcashPreviewAmount = document.getElementById("gcashPreviewAmount");
   const loadTypeInputs = Array.from(document.querySelectorAll("input[name='loadType']"));
 
   let selectedNetwork = "";
+  let selectedService = "eload";
 
   function onlyDigits(value) {
     return String(value || "").replace(/\D/g, "").slice(0, 11);
@@ -204,16 +286,12 @@
     eloadPromoHelp.textContent = `${selectedNetwork} promos are ready to choose.`;
   }
 
-  function renderPromoGuide() {
-    eloadPromoGuide.innerHTML = Object.entries(networkPromos).map(([network, promos]) => `
-      <div class="border rounded-4 p-3">
-        <div class="fw-semibold mb-1">${network}</div>
-        <div class="mini-note mb-2">${networkDescriptions[network]}</div>
-        <div class="d-flex flex-wrap gap-2">
-          ${promos.map((promo) => `<span class="badge rounded-pill text-bg-light border">${promo}</span>`).join("")}
-        </div>
-      </div>
-    `).join("");
+  function updateServiceCards() {
+    eloadServiceGrid.querySelectorAll("[data-service]").forEach((button) => {
+      button.classList.toggle("is-selected", button.dataset.service === selectedService);
+    });
+    eloadFlowCard.classList.toggle("d-none", selectedService !== "eload");
+    gcashFlowCard.classList.toggle("d-none", selectedService !== "gcash");
   }
 
   function updateLoadSections() {
@@ -247,10 +325,39 @@
     eloadSelectedNetworkText.textContent = selectedNetwork ? `Selected: ${selectedNetwork}` : "No network selected yet";
   }
 
+  function updateGcashPreview() {
+    const formattedNumber = formatPhilippineMobile(gcashMobileNumber.value);
+    const reference = gcashReferenceNumber.value.trim();
+    const amount = Number(gcashAmount.value || 0);
+    gcashPreviewNumber.textContent = formattedNumber || "09XX XXX XXXX";
+    gcashPreviewReference.textContent = reference || "Pending";
+    gcashPreviewFlow.textContent = gcashCashFlow.value;
+    gcashPreviewAmount.textContent = amount > 0 ? `PHP ${amount}` : "PHP 0";
+    gcashPreviewTitle.textContent = formattedNumber ? "GCash transaction prepared" : "Ready to prepare GCash transaction";
+    gcashPreviewSubtitle.textContent = formattedNumber || reference || amount
+      ? `${gcashCashFlow.value} details are ready for review.`
+      : "Complete the fields to preview the transaction details.";
+  }
+
+  eloadServiceGrid.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-service]");
+    if (!button) return;
+    selectedService = button.dataset.service;
+    updateServiceCards();
+  });
+
   eloadMobileNumber.addEventListener("input", () => {
     eloadMobileNumber.value = formatPhilippineMobile(eloadMobileNumber.value);
     updatePreview();
   });
+
+  gcashMobileNumber.addEventListener("input", () => {
+    gcashMobileNumber.value = formatPhilippineMobile(gcashMobileNumber.value);
+    updateGcashPreview();
+  });
+  gcashReferenceNumber.addEventListener("input", updateGcashPreview);
+  gcashCashFlow.addEventListener("change", updateGcashPreview);
+  gcashAmount.addEventListener("input", updateGcashPreview);
 
   eloadNetworkGrid.addEventListener("click", (event) => {
     const button = event.target.closest("[data-network]");
@@ -276,12 +383,17 @@
     event.preventDefault();
     updatePreview();
   });
+  gcashForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    updateGcashPreview();
+  });
 
+  updateServiceCards();
   renderNetworks();
   renderPromoOptions();
-  renderPromoGuide();
   updateLoadSections();
   updatePreview();
+  updateGcashPreview();
 </script>
 </body>
 </html>
