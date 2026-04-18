@@ -90,7 +90,7 @@
 </header>
 <button class="btn btn-success pos-cart-fab" type="button" id="globalCartToggleButton" aria-label="Open current cart">
   <i class="bi bi-cart3"></i>
-  <span class="pos-cart-fab-count" id="globalCartFabCount">0</span>
+  <span class="pos-cart-fab-count d-none" id="globalCartFabCount">0</span>
 </button>
 <script>
   window.addEventListener("load", () => {
@@ -130,7 +130,10 @@
     }
 
     function syncCartBadge() {
-      globalCartFabCount.textContent = String(readCartCount());
+      const cartCount = readCartCount();
+      globalCartFabCount.textContent = String(cartCount);
+      globalCartFabCount.classList.toggle("d-none", cartCount <= 0);
+      globalCartToggleButton.setAttribute("aria-label", cartCount > 0 ? `Open current cart with ${cartCount} item${cartCount === 1 ? "" : "s"}` : "Open current cart");
     }
 
     syncCartBadge();

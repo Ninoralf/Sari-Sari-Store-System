@@ -35,7 +35,22 @@
               <option value="Low/Out of Stock" <%= status === "Low/Out of Stock" ? "selected" : "" %>>Low/Out of Stock</option>
             </select>
           </div>
-          <div class="col-md-auto"><button class="btn btn-outline-secondary" type="button" id="inventoryPrintButton">Print List</button></div>
+          <div class="col-md-auto">
+            <div class="d-flex align-items-center gap-2">
+              <button class="btn btn-outline-secondary" type="button" id="inventoryPrintButton">Print List</button>
+              <button
+                class="btn btn-sm btn-outline-secondary rounded-circle d-inline-flex align-items-center justify-content-center"
+                type="button"
+                style="width: 1.9rem; height: 1.9rem;"
+                data-bs-toggle="tooltip"
+                data-bs-placement="right"
+                data-bs-title="Print the current inventory list using your active search and status filters. Use this after narrowing the table to the items you want to include."
+                aria-label="Print guide"
+              >
+                ?
+              </button>
+            </div>
+          </div>
           <% if (search || status !== "all") { %>
             <div class="col-md-auto"><a class="btn btn-outline-secondary" href="/inventory" id="inventoryClearLink">Clear</a></div>
           <% } %>
@@ -264,6 +279,9 @@
   });
   document.addEventListener("click", (event) => {
     if (!event.target.closest("#inventoryFilterForm")) inventorySuggestions.classList.add("d-none");
+  });
+  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
+    bootstrap.Tooltip.getOrCreateInstance(element);
   });
   loadInventoryResults();
 </script>

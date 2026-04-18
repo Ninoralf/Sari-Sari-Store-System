@@ -26,13 +26,25 @@
             <div class="col-12">
               <div class="vstack gap-4">
                 <div class="pos-search-wrap">
-                  <label class="form-label">Item Search</label>
+                  <div class="d-flex align-items-center gap-2 mb-2">
+                    <label class="form-label mb-0">Item Search</label>
+                    <button
+                      class="btn btn-sm btn-outline-secondary rounded-circle d-inline-flex align-items-center justify-content-center"
+                      type="button"
+                      style="width: 1.9rem; height: 1.9rem;"
+                      data-bs-toggle="tooltip"
+                      data-bs-placement="right"
+                      data-bs-title="Examples: Coke, Sardines, Soap. Search resets after each add."
+                      aria-label="Item search guide"
+                    >
+                      ?
+                    </button>
+                  </div>
                   <div class="input-group input-group-lg">
                     <span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
                     <input class="form-control" id="quickItemSearch" placeholder="Type item name, category, or code">
                     <button class="btn btn-success" id="addSelectedItem" type="button">Add Item</button>
                   </div>
-                  <div class="mini-note mt-2">Examples: `Coke`, `Sardines`, `Soap`. Search resets after each add.</div>
                   <div class="pos-suggestions list-group mt-2 d-none" id="quickSuggestions"></div>
                 </div>
 
@@ -567,7 +579,6 @@
   clearCartButton.addEventListener("click", resetForNewCustomer);
   newCustomerButton.addEventListener("click", resetForNewCustomer);
   closeCartButton.addEventListener("click", () => setCartOpen(false));
-  cartToggleButton.addEventListener("click", toggleCart);
   cartBackdrop.addEventListener("click", () => setCartOpen(false));
   window.addEventListener("sales-cart-toggle-request", toggleCart);
 
@@ -664,6 +675,9 @@
   loadSalesFilter("<%= filter %>");
   refreshSalesMetrics().catch(console.error);
   refreshSalesRecommendations().catch(console.error);
+  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
+    bootstrap.Tooltip.getOrCreateInstance(element);
+  });
 </script>
 </body>
 </html>
