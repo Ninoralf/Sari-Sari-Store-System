@@ -10,7 +10,7 @@
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
           <div>
             <div class="section-title">Quick Sale Entry</div>
-            <div class="mini-note">Built for faster sari-sari checkout: search, tap quick picks, and keep the cart visible.</div>
+            <div class="mini-note">Built for faster sari-sari checkout: search items and keep the cart visible.</div>
           </div>
           <div class="d-flex flex-wrap align-items-center gap-2">
             <div class="mini-note">Shortcut: <span class="fw-semibold text-dark">F2</span> focuses search</div>
@@ -47,47 +47,8 @@
                   </div>
                   <div class="pos-suggestions list-group mt-2 d-none" id="quickSuggestions"></div>
                 </div>
-
-                <div>
-                  <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div class="fw-semibold">Quick Picks</div>
-                    <button class="btn btn-sm btn-outline-secondary" type="button" id="clearCartButton">Clear Cart</button>
-                  </div>
-                  <div class="vstack gap-3">
-                    <div>
-                      <div class="mini-note mb-2">Hot Today</div>
-                      <div class="pos-chip-grid" id="quickPicksToday">
-                        <% quickPicks.today.forEach((item) => { %>
-                          <button class="btn btn-outline-secondary pos-chip" type="button" data-item-id="<%= item.id %>">
-                            <span class="d-block fw-semibold"><%= item.name %></span>
-                            <span class="mini-note"><%= formatCurrency(item.selling_price) %></span>
-                          </button>
-                        <% }) %>
-                      </div>
-                    </div>
-                    <div>
-                      <div class="mini-note mb-2">This Week</div>
-                      <div class="pos-chip-grid" id="quickPicksWeek">
-                        <% quickPicks.week.forEach((item) => { %>
-                          <button class="btn btn-outline-secondary pos-chip" type="button" data-item-id="<%= item.id %>">
-                            <span class="d-block fw-semibold"><%= item.name %></span>
-                            <span class="mini-note"><%= formatCurrency(item.selling_price) %></span>
-                          </button>
-                        <% }) %>
-                      </div>
-                    </div>
-                    <div>
-                      <div class="mini-note mb-2">Smart Picks</div>
-                      <div class="pos-chip-grid" id="quickPicksSmart">
-                        <% quickPicks.smart.forEach((item) => { %>
-                          <button class="btn btn-outline-secondary pos-chip" type="button" data-item-id="<%= item.id %>">
-                            <span class="d-block fw-semibold"><%= item.name %></span>
-                            <span class="mini-note"><%= formatCurrency(item.selling_price) %></span>
-                          </button>
-                        <% }) %>
-                      </div>
-                    </div>
-                  </div>
+                <div class="d-flex justify-content-end">
+                  <button class="btn btn-sm btn-outline-secondary" type="button" id="clearCartButton">Clear Cart</button>
                 </div>
               </div>
             </div>
@@ -103,7 +64,7 @@
 
 <div class="pos-cart-backdrop" id="cartBackdrop" hidden></div>
 <aside class="content-card pos-cart-flyout" id="cartFlyout" aria-hidden="true">
-  <div class="p-3 p-lg-4">
+  <div class="p-3 p-lg-4 pos-cart-content">
     <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
       <div>
         <div class="section-title">Current Cart</div>
@@ -157,7 +118,7 @@
       </div>
     </div>
 
-    <div class="d-flex justify-content-end gap-2 mt-3">
+    <div class="d-flex justify-content-end gap-2 mt-3 pos-cart-actions">
       <button class="btn btn-success btn-lg" type="submit" form="saleForm">Complete Sale</button>
     </div>
   </div>
@@ -196,7 +157,12 @@
               <div class="vstack gap-2">
                 <% sale.items.forEach((item) => { %>
                   <div class="d-flex justify-content-between rounded-4 border p-3">
-                    <span><%= item.item_name %></span>
+                    <span>
+                      <span class="d-block"><%= item.item_name %></span>
+                      <% if (item.item_type === "eload") { %>
+                        <span class="mini-note"><%= item.network %> | <%= item.mobile_number %></span>
+                      <% } %>
+                    </span>
                     <span class="mini-note"><%= item.quantity %> x <%= formatCurrency(item.price) %> = <strong class="text-dark"><%= formatCurrency(item.total) %></strong></span>
                   </div>
                 <% }) %>
@@ -229,13 +195,9 @@
   const cartBackdrop = document.getElementById("cartBackdrop");
   const cartFlyout = document.getElementById("cartFlyout");
   const cartFabCount = document.getElementById("globalCartFabCount");
-  const chipButtons = document.querySelectorAll(".pos-chip");
   const salesAccordion = document.getElementById("salesAccordion");
   const salesFilterButtons = [...document.querySelectorAll("[data-sales-filter]")];
   const salesLiveAlert = document.getElementById("salesLiveAlert");
-  const quickPicksToday = document.getElementById("quickPicksToday");
-  const quickPicksWeek = document.getElementById("quickPicksWeek");
-  const quickPicksSmart = document.getElementById("quickPicksSmart");
   let salesFilterController;
   const cartStorageKey = "sales-cart-state";
   const cartOpenStorageKey = "sales-cart-open-on-load";
@@ -251,17 +213,35 @@
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return [];
 
-      return parsed
-        .map((entry) => {
+        return parsed
+          .map((entry) => {
+          if (entry?.type === "eload") {
+            const quantity = Math.max(1, Number(entry.quantity) || 1);
+            const price = Number(entry.price || 0);
+            if (!entry.mobileNumber || !entry.network || !entry.loadValue || price <= 0) return null;
+            return {
+              id: String(entry.id || `eload-${Date.now()}`),
+              type: "eload",
+              name: String(entry.name || entry.loadValue),
+              price,
+              quantity,
+              mobileNumber: String(entry.mobileNumber || ""),
+              network: String(entry.network || ""),
+              loadType: String(entry.loadType || ""),
+              loadValue: String(entry.loadValue || ""),
+              notes: String(entry.notes || "")
+            };
+          }
+
           const item = inventoryItems.find((candidate) => candidate.id === Number(entry.id));
-          if (!item || item.stock_quantity < 1) return null;
-          const quantity = Math.max(1, Math.min(Number(entry.quantity) || 1, item.stock_quantity));
+          if (!item || item.status === "Out of Stock") return null;
+          const quantity = Math.max(1, Number(entry.quantity) || 1);
           return {
             id: item.id,
+            type: "inventory",
             name: item.name,
             price: item.selling_price,
-            quantity,
-            stock: item.stock_quantity
+            quantity
           };
         })
         .filter(Boolean);
@@ -326,15 +306,15 @@
       return;
     }
 
-    suggestions.innerHTML = items.map((item, index) => `
-      <button class="list-group-item list-group-item-action pos-suggestion ${index === 0 ? "active" : ""}" type="button" data-item-id="${item.id}">
-        <div class="d-flex justify-content-between gap-3">
-          <span class="fw-semibold">${escapeHtml(item.name)}</span>
-          <span>${peso.format(item.selling_price)}</span>
-        </div>
-        <div class="mini-note">${escapeHtml(item.category)} | ${item.stock_quantity} left</div>
-      </button>
-    `).join("");
+      suggestions.innerHTML = items.map((item, index) => `
+        <button class="list-group-item list-group-item-action pos-suggestion ${index === 0 ? "active" : ""}" type="button" data-item-id="${item.id}">
+          <div class="d-flex justify-content-between gap-3">
+            <span class="fw-semibold">${escapeHtml(item.name)}</span>
+            <span>${peso.format(item.selling_price)}</span>
+          </div>
+          <div class="mini-note">${escapeHtml(item.category)}</div>
+        </button>
+      `).join("");
     suggestions.classList.remove("d-none");
   }
 
@@ -354,17 +334,16 @@
 
     const existing = cart.find((entry) => entry.id === item.id);
     const nextQuantity = (existing ? existing.quantity : 0) + qty;
-    const safeQuantity = Math.min(nextQuantity, item.stock_quantity);
 
-    if (existing) {
-      existing.quantity = safeQuantity;
-    } else {
-      cart.push({
-        id: item.id,
-        name: item.name,
-        price: item.selling_price,
-        quantity: Math.min(qty, item.stock_quantity),
-        stock: item.stock_quantity
+      if (existing) {
+        existing.quantity = nextQuantity;
+      } else {
+        cart.push({
+          id: item.id,
+          type: "inventory",
+          name: item.name,
+          price: item.selling_price,
+          quantity: qty
       });
     }
 
@@ -389,37 +368,40 @@
     let totalAmount = 0;
     let totalUnits = 0;
 
-    cartBody.innerHTML = cart.map((item, index) => {
-      const lineTotal = item.quantity * item.price;
-      totalAmount += lineTotal;
-      totalUnits += item.quantity;
-      return `
-        <tr>
-          <td>
-            <div class="fw-semibold">${escapeHtml(item.name)}</div>
-            <div class="mini-note">${item.stock} in stock</div>
-          </td>
-          <td class="text-end">${peso.format(item.price)}</td>
-          <td>
-            <input class="form-control form-control-sm cart-qty-input" type="number" min="1" max="${item.stock}" value="${item.quantity}" data-index="${index}" inputmode="numeric">
-            <div class="d-flex gap-1 mt-1">
-              <button class="btn btn-sm btn-outline-secondary cart-qty-step" type="button" data-index="${index}" data-step="-1">-</button>
-              <button class="btn btn-sm btn-outline-secondary cart-qty-step" type="button" data-index="${index}" data-step="1">+</button>
-            </div>
-          </td>
-          <td class="text-end fw-semibold">${peso.format(lineTotal)}</td>
-          <td class="text-end">
-            <button class="btn btn-sm btn-outline-danger remove-cart-item" type="button" data-index="${index}"><i class="bi bi-x-lg"></i></button>
+      cartBody.innerHTML = cart.map((item, index) => {
+        const lineTotal = item.quantity * item.price;
+        totalAmount += lineTotal;
+        totalUnits += item.quantity;
+        return `
+          <tr>
+            <td>
+              <div class="fw-semibold">${escapeHtml(item.name)}</div>
+              <div class="mini-note">${item.type === "eload" ? `${escapeHtml(item.network)} | ${escapeHtml(item.mobileNumber)}` : "Product item"}</div>
+            </td>
+            <td class="text-end">${peso.format(item.price)}</td>
+            <td>
+              ${item.type === "eload"
+                ? `<div class="form-control form-control-sm bg-light">1 request</div>
+                   <div class="mini-note mt-1">${escapeHtml(item.loadValue)}</div>`
+                : `<input class="form-control form-control-sm cart-qty-input" type="number" min="1" value="${item.quantity}" data-index="${index}" inputmode="numeric">
+                   <div class="d-flex gap-1 mt-1">
+                     <button class="btn btn-sm btn-outline-secondary cart-qty-step" type="button" data-index="${index}" data-step="-1">-</button>
+                     <button class="btn btn-sm btn-outline-secondary cart-qty-step" type="button" data-index="${index}" data-step="1">+</button>
+                   </div>`}
+            </td>
+            <td class="text-end fw-semibold">${peso.format(lineTotal)}</td>
+            <td class="text-end">
+              <button class="btn btn-sm btn-outline-danger remove-cart-item" type="button" data-index="${index}"><i class="bi bi-x-lg"></i></button>
           </td>
         </tr>
       `;
     }).join("");
 
-    hiddenInputs.innerHTML = cart.map((item) => `
-      <input type="hidden" name="itemId" value="${item.id}">
-      <input type="hidden" name="quantity" value="${item.quantity}">
-      <input type="hidden" name="price" value="${item.price}">
-    `).join("");
+      hiddenInputs.innerHTML = cart.map((item) => `
+        <input type="hidden" name="itemId" value="${item.type === "inventory" ? item.id : ""}">
+        <input type="hidden" name="quantity" value="${item.quantity}">
+        <input type="hidden" name="price" value="${item.price}">
+      `).join("");
 
     grandTotal.textContent = peso.format(totalAmount);
     cartItemCount.textContent = String(cart.length);
@@ -449,29 +431,8 @@
     salesLiveAlert.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show mb-4" role="alert">${escapeHtml(message)}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
   }
 
-  function renderQuickPickButtons(container, items) {
-    container.innerHTML = items.map((item) => `
-      <button class="btn btn-outline-secondary pos-chip" type="button" data-item-id="${item.id}">
-        <span class="d-block fw-semibold">${escapeHtml(item.name)}</span>
-        <span class="mini-note">${peso.format(item.selling_price)}</span>
-      </button>
-    `).join("");
-    container.querySelectorAll(".pos-chip").forEach((button) => {
-      button.addEventListener("click", () => addItemToCart(button.dataset.itemId, 1));
-    });
-  }
-
   function updateSalesMetrics(metrics) {
     return metrics;
-  }
-
-  async function refreshSalesRecommendations() {
-    const response = await fetch("/api/sales/recommendations", { headers: { Accept: "application/json" } });
-    if (!response.ok) throw new Error("Failed to load recommendations.");
-    const payload = await response.json();
-    renderQuickPickButtons(quickPicksToday, payload.today || []);
-    renderQuickPickButtons(quickPicksWeek, payload.week || []);
-    renderQuickPickButtons(quickPicksSmart, payload.smart || []);
   }
 
   async function refreshSalesMetrics() {
@@ -501,7 +462,10 @@
               <div class="vstack gap-2">
                 ${sale.items.map((item) => `
                   <div class="d-flex justify-content-between rounded-4 border p-3">
-                    <span>${escapeHtml(item.item_name)}</span>
+                    <span>
+                      <span class="d-block">${escapeHtml(item.item_name)}</span>
+                      ${item.item_type === "eload" ? `<span class="mini-note">${escapeHtml(item.network || "")} | ${escapeHtml(item.mobile_number || "")}</span>` : ""}
+                    </span>
                     <span class="mini-note">${item.quantity} x ${peso.format(item.price)} = <strong class="text-dark">${peso.format(item.total)}</strong></span>
                   </div>
                 `).join("")}
@@ -582,10 +546,6 @@
   cartBackdrop.addEventListener("click", () => setCartOpen(false));
   window.addEventListener("sales-cart-toggle-request", toggleCart);
 
-  chipButtons.forEach((button) => {
-    button.addEventListener("click", () => addItemToCart(button.dataset.itemId, 1));
-  });
-
   salesFilterButtons.forEach((button) => {
     button.addEventListener("click", () => loadSalesFilter(button.dataset.salesFilter));
   });
@@ -599,8 +559,9 @@
     const input = event.target.closest(".cart-qty-input");
     if (!input) return;
     const index = Number(input.dataset.index);
+    if (cart[index]?.type === "eload") return;
     if (input.value === "") return;
-    cart[index].quantity = Math.max(1, Math.min(Number(input.value) || 1, cart[index].stock));
+    cart[index].quantity = Math.max(1, Number(input.value) || 1);
     renderCart();
   });
 
@@ -615,8 +576,9 @@
     const stepButton = event.target.closest(".cart-qty-step");
     if (!stepButton) return;
     const index = Number(stepButton.dataset.index);
+    if (cart[index]?.type === "eload") return;
     const step = Number(stepButton.dataset.step);
-    cart[index].quantity = Math.max(1, Math.min(cart[index].quantity + step, cart[index].stock));
+    cart[index].quantity = Math.max(1, cart[index].quantity + step);
     renderCart();
   });
 
@@ -632,8 +594,17 @@
       _csrf: formData.get("_csrf"),
       saleDate: formData.get("saleDate"),
       paymentMethod: formData.get("paymentMethod"),
-      items: cart.map((item) => ({
+      items: cart.filter((item) => item.type !== "eload").map((item) => ({
         inventoryItemId: item.id,
+        quantity: item.quantity,
+        price: item.price
+      })),
+      digitalItems: cart.filter((item) => item.type === "eload").map((item) => ({
+        mobileNumber: item.mobileNumber,
+        network: item.network,
+        loadType: item.loadType,
+        loadValue: item.loadValue,
+        notes: item.notes,
         quantity: item.quantity,
         price: item.price
       }))
@@ -653,11 +624,6 @@
         showSalesAlert("success", data.message || "Sale recorded successfully.");
         resetForNewCustomer();
         if (data.metrics) updateSalesMetrics(data.metrics);
-        if (data.recommendations) {
-          renderQuickPickButtons(quickPicksToday, data.recommendations.today || []);
-          renderQuickPickButtons(quickPicksWeek, data.recommendations.week || []);
-          renderQuickPickButtons(quickPicksSmart, data.recommendations.smart || []);
-        }
         loadSalesFilter("all");
       })
       .catch((error) => {
@@ -674,7 +640,6 @@
   }
   loadSalesFilter("<%= filter %>");
   refreshSalesMetrics().catch(console.error);
-  refreshSalesRecommendations().catch(console.error);
   document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
     bootstrap.Tooltip.getOrCreateInstance(element);
   });

@@ -528,6 +528,7 @@ body[data-color-scheme="Amber"] {
   position: fixed;
   right: 1.5rem;
   bottom: 6.5rem;
+  display: flex;
   width: min(32rem, calc(100vw - 2rem));
   max-height: min(80vh, 46rem);
   overflow: hidden;
@@ -538,6 +539,25 @@ body[data-color-scheme="Amber"] {
   pointer-events: none;
   transition: opacity 0.2s ease, transform 0.2s ease;
   z-index: 1050;
+}
+
+.pos-cart-content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pos-cart-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.pos-cart-actions {
+  position: sticky;
+  bottom: 0;
+  padding-top: 0.75rem;
+  background: var(--surface-card);
 }
 
 .pos-cart-flyout.is-open {
@@ -722,7 +742,11 @@ body[data-color-scheme="Amber"] {
     right: 1rem;
     bottom: 5.75rem;
     width: calc(100vw - 2rem);
-    max-height: 78vh;
+    max-height: 82vh;
+  }
+
+  .pos-cart-actions .btn {
+    width: 100%;
   }
 
   .pos-cart-fab {

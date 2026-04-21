@@ -50,7 +50,7 @@
                         <td class="fw-semibold"><%= entry.transactionCode %></td>
                         <td class="text-end"><%= formatCurrency(entry.totalAmount) %></td>
                         <td><%= entry.employee || "-" %></td>
-                        <td><%= entry.timeStamp %></td>
+                        <td><%= formatDateTime(entry.timeStamp) %></td>
                         <td class="text-end">
                           <button
                             class="btn btn-sm btn-outline-secondary rounded-circle product-log-popover"
@@ -81,7 +81,7 @@
             <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
               <div>
                 <div class="section-title">Eload Logs</div>
-                <div class="mini-note">Load-category transactions recorded on the selected date.</div>
+                <div class="mini-note">Eload requests made on the selected date, with completion details shown in each row.</div>
               </div>
               <div class="badge rounded-pill text-bg-light border px-3 py-2" id="eloadLogsSummary"><%= logs.summary.eloadCount %> entries | <%= formatCurrency(logs.summary.eloadTotal) %></div>
             </div>
@@ -89,11 +89,13 @@
               <table class="table align-middle mb-0">
                 <thead>
                   <tr>
-                    <th>Transaction</th>
+                    <th>Request</th>
                     <th>Number</th>
                     <th>Network</th>
                     <th>Load Item</th>
-                    <th>Employee</th>
+                    <th>Requested</th>
+                    <th>Completed</th>
+                    <th>Status</th>
                     <th class="text-end">Amount</th>
                   </tr>
                 </thead>
@@ -101,16 +103,18 @@
                   <% if (logs.eloadLogs.length) { %>
                     <% logs.eloadLogs.forEach((entry) => { %>
                       <tr>
-                        <td class="fw-semibold"><%= entry.transactionCode %></td>
+                        <td class="fw-semibold"><%= entry.requestCode %></td>
                         <td><%= entry.number || "-" %></td>
                         <td><%= entry.network || "-" %></td>
-                        <td><%= entry.itemName %></td>
-                        <td><%= entry.employee || "-" %></td>
+                        <td><%= entry.loadValue || "-" %></td>
+                        <td><%= entry.requestedBy || "-" %><div class="mini-note"><%= formatDateTime(entry.requestedAt) %></div></td>
+                        <td><%= entry.completedBy || "-" %><div class="mini-note"><%= formatDateTime(entry.completedAt) %></div></td>
+                        <td><span class="badge <%= entry.status === "Completed" ? "text-bg-success" : "text-bg-warning" %>"><%= entry.status %></span></td>
                         <td class="text-end"><%= formatCurrency(entry.amount) %></td>
                       </tr>
                     <% }) %>
                   <% } else { %>
-                    <tr><td colspan="6" class="text-center py-4 mini-note">No eload logs for this date.</td></tr>
+                    <tr><td colspan="8" class="text-center py-4 mini-note">No eload logs for this date.</td></tr>
                   <% } %>
                 </tbody>
               </table>
@@ -123,7 +127,7 @@
             <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
               <div>
                 <div class="section-title">GCash Logs</div>
-                <div class="mini-note">Transactions paid through GCash on the selected date.</div>
+                <div class="mini-note">GCash requests made on the selected date, with completion details shown in each row.</div>
               </div>
               <div class="badge rounded-pill text-bg-light border px-3 py-2" id="gcashLogsSummary"><%= logs.summary.gcashCount %> entries | <%= formatCurrency(logs.summary.gcashTotal) %></div>
             </div>
@@ -131,11 +135,13 @@
               <table class="table align-middle mb-0">
                 <thead>
                   <tr>
-                    <th>Transaction</th>
+                    <th>Request</th>
                     <th>Number</th>
                     <th>Reference No.</th>
-                    <th>Employee</th>
+                    <th>Requested</th>
+                    <th>Completed</th>
                     <th>Cash IN/OUT</th>
+                    <th>Status</th>
                     <th class="text-end">Paid</th>
                   </tr>
                 </thead>
@@ -143,16 +149,18 @@
                   <% if (logs.gcashLogs.length) { %>
                     <% logs.gcashLogs.forEach((entry) => { %>
                       <tr>
-                        <td class="fw-semibold"><%= entry.transactionCode %></td>
+                        <td class="fw-semibold"><%= entry.requestCode %></td>
                         <td><%= entry.number || "-" %></td>
                         <td><%= entry.referenceNo || "-" %></td>
-                        <td><%= entry.employee || "-" %></td>
-                        <td><%= entry.cashInOut || "IN" %></td>
+                        <td><%= entry.requestedBy || "-" %><div class="mini-note"><%= formatDateTime(entry.requestedAt) %></div></td>
+                        <td><%= entry.completedBy || "-" %><div class="mini-note"><%= formatDateTime(entry.completedAt) %></div></td>
+                        <td><%= entry.requestKind || "Cash In" %></td>
+                        <td><span class="badge <%= entry.status === "Completed" ? "text-bg-success" : "text-bg-warning" %>"><%= entry.status %></span></td>
                         <td class="text-end"><%= formatCurrency(entry.totalAmount) %></td>
                       </tr>
                     <% }) %>
                   <% } else { %>
-                    <tr><td colspan="6" class="text-center py-4 mini-note">No GCash logs for this date.</td></tr>
+                    <tr><td colspan="8" class="text-center py-4 mini-note">No GCash logs for this date.</td></tr>
                   <% } %>
                 </tbody>
               </table>
@@ -182,6 +190,18 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
+  }
+
+  function formatDateTimeClient(value) {
+    if (!value) return "-";
+    return new Date(`${String(value).replace(" ", "T")}Z`).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: "Asia/Manila"
+    });
   }
 
   function renderRows(body, rows, emptyMessage, columns, formatter) {
@@ -259,7 +279,7 @@
           <td class="fw-semibold">${escapeHtml(entry.transactionCode)}</td>
           <td class="text-end">${peso.format(entry.totalAmount)}</td>
           <td>${escapeHtml(entry.employee || "-")}</td>
-          <td>${escapeHtml(entry.timeStamp || "-")}</td>
+          <td>${escapeHtml(formatDateTimeClient(entry.timeStamp))}</td>
           <td class="text-end">
             <button
               class="btn btn-sm btn-outline-secondary rounded-circle product-log-popover"
@@ -278,24 +298,28 @@
       `).join(""));
       bindProductLogPopovers();
 
-      renderRows(eloadLogsBody, payload.eloadLogs, "No eload logs for this date.", 6, (rows) => rows.map((entry) => `
+      renderRows(eloadLogsBody, payload.eloadLogs, "No eload logs for this date.", 8, (rows) => rows.map((entry) => `
         <tr>
-          <td class="fw-semibold">${escapeHtml(entry.transactionCode)}</td>
+          <td class="fw-semibold">${escapeHtml(entry.requestCode)}</td>
           <td>${escapeHtml(entry.number || "-")}</td>
           <td>${escapeHtml(entry.network || "-")}</td>
-          <td>${escapeHtml(entry.itemName)}</td>
-          <td>${escapeHtml(entry.employee || "-")}</td>
+          <td>${escapeHtml(entry.loadValue || "-")}</td>
+          <td>${escapeHtml(entry.requestedBy || "-")}<div class="mini-note">${escapeHtml(formatDateTimeClient(entry.requestedAt))}</div></td>
+          <td>${escapeHtml(entry.completedBy || "-")}<div class="mini-note">${escapeHtml(formatDateTimeClient(entry.completedAt))}</div></td>
+          <td><span class="badge ${entry.status === "Completed" ? "text-bg-success" : "text-bg-warning"}">${escapeHtml(entry.status || "Pending")}</span></td>
           <td class="text-end">${peso.format(entry.amount)}</td>
         </tr>
       `).join(""));
 
-      renderRows(gcashLogsBody, payload.gcashLogs, "No GCash logs for this date.", 6, (rows) => rows.map((entry) => `
+      renderRows(gcashLogsBody, payload.gcashLogs, "No GCash logs for this date.", 8, (rows) => rows.map((entry) => `
         <tr>
-          <td class="fw-semibold">${escapeHtml(entry.transactionCode)}</td>
+          <td class="fw-semibold">${escapeHtml(entry.requestCode)}</td>
           <td>${escapeHtml(entry.number || "-")}</td>
           <td>${escapeHtml(entry.referenceNo || "-")}</td>
-          <td>${escapeHtml(entry.employee || "-")}</td>
-          <td>${escapeHtml(entry.cashInOut || "IN")}</td>
+          <td>${escapeHtml(entry.requestedBy || "-")}<div class="mini-note">${escapeHtml(formatDateTimeClient(entry.requestedAt))}</div></td>
+          <td>${escapeHtml(entry.completedBy || "-")}<div class="mini-note">${escapeHtml(formatDateTimeClient(entry.completedAt))}</div></td>
+          <td>${escapeHtml(entry.requestKind || "Cash In")}</td>
+          <td><span class="badge ${entry.status === "Completed" ? "text-bg-success" : "text-bg-warning"}">${escapeHtml(entry.status || "Pending")}</span></td>
           <td class="text-end">${peso.format(entry.totalAmount)}</td>
         </tr>
       `).join(""));

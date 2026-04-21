@@ -5,7 +5,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   addInventoryItem,
+  completeDigitalServiceRequest,
   createUserAccount,
+  createDigitalServiceRequest,
   createSale,
   deleteInventoryItem,
   exportInventoryCsv,
@@ -15,10 +17,10 @@ import {
   getDashboardChartData,
   getDatabasePath,
   getLogsData,
-  getQuickSaleRecommendations,
   getReportsData,
   getSalesMetrics,
   getStoreSettings,
+  listDigitalServiceRequests,
   getUserById,
   getUserByUsername,
   initializeDatabase,
@@ -90,6 +92,7 @@ function buildNotifications(storeSettings) {
   const notifications = [];
   const inventory = listInventory("");
   const metrics = getSalesMetrics();
+  const pendingEloadRequests = listDigitalServiceRequests().filter((request) => request.service_type === "eload" && request.status === "Pending");
   const lowStockItems = inventory.filter((item) => item.status === "Low Stock");
   const outOfStockItems = inventory.filter((item) => item.status === "Out of Stock");
 
@@ -128,6 +131,16 @@ function buildNotifications(storeSettings) {
       icon: "bi-calendar-week",
       title: "Weekly sales",
       message: `${formatCurrency(metrics.weeklyTotal)} recorded in the last 7 days.`
+    });
+  }
+
+  if (pendingEloadRequests.length) {
+    notifications.push({
+      tone: "primary",
+      icon: "bi-phone",
+      title: "Pending eLoad requests",
+      message: `${pendingEloadRequests.length} eLoad request${pendingEloadRequests.length === 1 ? "" : "s"} waiting to be completed.`,
+      link: "/eload"
     });
   }
 
@@ -243,12 +256,41 @@ function requireAdminApi(req, res, next) {
   return next();
 }
 
+function requireSalesAccess(req, res, next) {
+  const currentUser = getUserById(req.session.user.id);
+  if (!currentUser || (currentUser.role !== "Admin" && currentUser.role !== "User")) {
+    setFlash(req, "danger", "You do not have access to that page.");
+    return res.redirect("/");
+  }
+  return next();
+}
+
+function requireSalesApiAccess(req, res, next) {
+  const currentUser = getUserById(req.session.user.id);
+  if (!currentUser || (currentUser.role !== "Admin" && currentUser.role !== "User")) {
+    return res.status(403).json({ error: "Sales access required." });
+  }
+  return next();
+}
+
 function formatCurrency(value) {
   return Number(value || 0).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
 }
 
 function formatLongDate(dateString) {
   return new Date(`${dateString}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  return new Date(`${String(value).replace(" ", "T")}Z`).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Asia/Manila"
+  });
 }
 
 function isoDateToday() {
@@ -283,6 +325,22 @@ function normalizeRole(value) {
 
 function isFourDigitPin(value) {
   return /^\d{4}$/.test(String(value || "").trim());
+}
+
+function normalizePhoneDigits(value) {
+  return String(value || "").replace(/\D/g, "").slice(0, 11);
+}
+
+function formatPhilippineMobile(value) {
+  const digits = normalizePhoneDigits(value);
+  if (digits.length !== 11 || !digits.startsWith("09")) return "";
+  return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 11)}`;
+}
+
+function parseCurrencyAmount(value) {
+  const match = String(value || "").match(/(\d+(?:\.\d+)?)/g);
+  if (!match?.length) return 0;
+  return Number(match[match.length - 1]);
 }
 
 app.get("/", requireAuth, (req, res) => {
@@ -328,7 +386,7 @@ app.get("/api/inventory", requireApiAuth, (req, res) => {
   });
 });
 
-app.get("/api/sales", requireApiAuth, requireAdminApi, (req, res) => {
+app.get("/api/sales", requireApiAuth, requireSalesApiAccess, (req, res) => {
   const filter = normalizeSalesFilter(req.query.filter);
   const sales = listSales(filter);
   return res.json({
@@ -338,11 +396,7 @@ app.get("/api/sales", requireApiAuth, requireAdminApi, (req, res) => {
   });
 });
 
-app.get("/api/sales/recommendations", requireApiAuth, requireAdminApi, (req, res) => {
-  return res.json(getQuickSaleRecommendations());
-});
-
-app.get("/api/sales/metrics", requireApiAuth, requireAdminApi, (req, res) => {
+app.get("/api/sales/metrics", requireApiAuth, requireSalesApiAccess, (req, res) => {
   return res.json(getSalesMetrics());
 });
 
@@ -351,18 +405,29 @@ app.get("/api/logs", requireApiAuth, requireAdminApi, (req, res) => {
   return res.json(getLogsData(date));
 });
 
-app.post("/api/sales", requireApiAuth, requireAdminApi, (req, res) => {
+app.post("/api/sales", requireApiAuth, requireSalesApiAccess, (req, res) => {
   try {
     const currentUser = getUserById(req.session.user.id);
     const items = Array.isArray(req.body.items) ? req.body.items : [];
+    const digitalItems = Array.isArray(req.body.digitalItems) ? req.body.digitalItems : [];
     const normalizedItems = items.map((item) => ({
       inventoryItemId: Number(item.inventoryItemId),
       quantity: Number(item.quantity),
       price: Number(item.price),
       total: Number(item.quantity) * Number(item.price)
     })).filter((item) => item.inventoryItemId && item.quantity > 0);
+    const normalizedDigitalItems = digitalItems.map((item) => ({
+      mobileNumber: String(item.mobileNumber || "").trim(),
+      network: String(item.network || "").trim(),
+      loadType: String(item.loadType || "").trim(),
+      loadValue: String(item.loadValue || "").trim(),
+      notes: String(item.notes || "").trim(),
+      quantity: Math.max(1, Number(item.quantity) || 1),
+      price: Number(item.price),
+      total: Math.max(1, Number(item.quantity) || 1) * Number(item.price)
+    })).filter((item) => item.mobileNumber && item.network && item.loadValue && item.price > 0);
 
-    if (!normalizedItems.length) {
+    if (!normalizedItems.length && !normalizedDigitalItems.length) {
       return res.status(400).json({ error: "Add at least one item to the sale." });
     }
 
@@ -370,14 +435,16 @@ app.post("/api/sales", requireApiAuth, requireAdminApi, (req, res) => {
       saleDate: req.body.saleDate || isoDateToday(),
       paymentMethod: req.body.paymentMethod,
       items: normalizedItems,
-      employeeName: currentUser?.full_name || currentUser?.username || "System"
+      digitalItems: normalizedDigitalItems,
+      employeeName: currentUser?.full_name || currentUser?.username || "System",
+      requestedByUserId: currentUser?.id,
+      completedByUserId: currentUser?.id
     });
 
     return res.json({
       success: true,
       message: "Sale recorded successfully.",
       metrics: getSalesMetrics(),
-      recommendations: getQuickSaleRecommendations(),
       sales: listSales("all").slice(0, 20)
     });
   } catch (error) {
@@ -432,8 +499,77 @@ app.get("/inventory", requireAuth, (req, res) => {
 app.get("/eload", requireAuth, (req, res) => {
   res.render("eload", {
     pageTitle: "Eload",
-    todayLabel: todayLabel()
+    todayLabel: todayLabel(),
+    requests: listDigitalServiceRequests(),
+    formatCurrency,
+    formatDateTime
   });
+});
+
+app.post("/eload/requests", requireAuth, (req, res) => {
+  try {
+    const currentUser = getUserById(req.session.user.id);
+    const serviceType = String(req.body.serviceType || "").trim().toLowerCase() === "gcash" ? "gcash" : "eload";
+    const mobileNumber = formatPhilippineMobile(req.body.mobileNumber);
+    if (!mobileNumber) throw new Error("Enter a valid 11-digit mobile number starting with 09.");
+
+    if (serviceType === "gcash") {
+      const amount = Number(req.body.amount || 0);
+      if (amount <= 0) throw new Error("Enter a valid GCash amount.");
+
+      createDigitalServiceRequest({
+        serviceType,
+        mobileNumber,
+        amount,
+        requestKind: String(req.body.cashFlow || "").trim() || "Cash In",
+        referenceNo: String(req.body.referenceNumber || "").trim(),
+        notes: String(req.body.notes || "").trim(),
+        requestedByUserId: currentUser?.id,
+        requestedByName: currentUser?.full_name || currentUser?.username || "System"
+      });
+    } else {
+      const loadType = String(req.body.loadType || "").trim().toLowerCase();
+      const network = String(req.body.network || "").trim().toUpperCase();
+      const loadValue = String(req.body.loadValue || "").trim();
+      const amount = loadType === "regular" ? Number(req.body.amount || 0) : parseCurrencyAmount(loadValue);
+
+      if (!network) throw new Error("Choose a network for the eload request.");
+      if (!loadValue) throw new Error("Choose a load option for the eload request.");
+      if (amount <= 0) throw new Error("Enter a valid eload amount.");
+
+      createDigitalServiceRequest({
+        serviceType,
+        mobileNumber,
+        amount,
+        network,
+        loadType,
+        loadValue,
+        notes: String(req.body.notes || "").trim(),
+        requestedByUserId: currentUser?.id,
+        requestedByName: currentUser?.full_name || currentUser?.username || "System"
+      });
+    }
+
+    setFlash(req, "success", "Digital service request created.");
+  } catch (error) {
+    setFlash(req, "danger", error.message);
+  }
+  res.redirect("/eload");
+});
+
+app.post("/eload/requests/:id/complete", requireAuth, (req, res) => {
+  try {
+    const currentUser = getUserById(req.session.user.id);
+    completeDigitalServiceRequest(Number(req.params.id), {
+      referenceNo: String(req.body.referenceNumber || "").trim(),
+      completedByUserId: currentUser?.id,
+      completedByName: currentUser?.full_name || currentUser?.username || "System"
+    });
+    setFlash(req, "success", "Digital service request marked as completed.");
+  } catch (error) {
+    setFlash(req, "danger", error.message);
+  }
+  res.redirect("/eload");
 });
 
 app.post("/inventory/add", requireAuth, requireAdmin, (req, res) => {
@@ -466,7 +602,7 @@ app.post("/inventory/:id/delete", requireAuth, requireAdmin, (req, res) => {
   res.redirect("/inventory");
 });
 
-app.get("/sales", requireAuth, requireAdmin, (req, res) => {
+app.get("/sales", requireAuth, requireSalesAccess, (req, res) => {
   const filter = req.query.filter || "all";
   res.render("sales", {
     pageTitle: "Sales",
@@ -475,14 +611,13 @@ app.get("/sales", requireAuth, requireAdmin, (req, res) => {
     filter,
     metrics: getSalesMetrics(),
     saleDateDefault: isoDateToday(),
-    inventory: listInventory("").filter((item) => item.stock_quantity > 0),
-    quickPicks: getQuickSaleRecommendations(),
+    inventory: listInventory("").filter((item) => item.status !== "Out of Stock"),
     formatCurrency,
     formatLongDate
   });
 });
 
-app.post("/sales/add", requireAuth, requireAdmin, (req, res) => {
+app.post("/sales/add", requireAuth, requireSalesAccess, (req, res) => {
   try {
     const currentUser = getUserById(req.session.user.id);
     const ids = Array.isArray(req.body.itemId) ? req.body.itemId : [req.body.itemId];
@@ -520,7 +655,8 @@ app.get("/logs", requireAuth, requireAdmin, (req, res) => {
     todayLabel: todayLabel(),
     selectedDate,
     logs: getLogsData(selectedDate),
-    formatCurrency
+    formatCurrency,
+    formatDateTime
   });
 });
 
@@ -587,13 +723,14 @@ app.post("/users/add", requireAuth, requireAdmin, (req, res) => {
   const password = String(req.body.password || "");
   const pin = String(req.body.pin || "").trim();
   const securityPin = String(req.body.securityPin || "").trim();
+  const role = normalizeRole(req.body.role);
 
-  if (!username || !fullName || !email || !phone || !password || !pin) {
-    setFlash(req, "danger", "All account fields are required.");
+  if (!username || !fullName || !email || !phone || !password) {
+    setFlash(req, "danger", "All account fields except PIN are required for standard users.");
     return res.redirect("/users");
   }
 
-  if (normalizeRole(req.body.role) === "Admin" && !isFourDigitPin(pin)) {
+  if (role === "Admin" && !isFourDigitPin(pin)) {
     setFlash(req, "danger", "New user PIN must be exactly 4 digits.");
     return res.redirect("/users");
   }
@@ -607,7 +744,7 @@ app.post("/users/add", requireAuth, requireAdmin, (req, res) => {
     createUserAccount({
       username,
       fullName,
-      role: normalizeRole(req.body.role),
+      role,
       email,
       phone,
       password,

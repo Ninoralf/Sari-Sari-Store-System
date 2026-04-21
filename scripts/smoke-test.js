@@ -8,6 +8,7 @@ const server = spawn(process.execPath, ["src/server.js"], {
 });
 
 let startupOutput = "";
+let sessionCookie = "";
 
 server.stdout.on("data", (chunk) => {
   startupOutput += chunk.toString();
@@ -40,17 +41,35 @@ async function waitForServer() {
 
 function extractCookie(response) {
   const setCookie = response.headers.get("set-cookie");
-  if (!setCookie) {
-    throw new Error("Login response did not include a session cookie.");
+  return setCookie ? setCookie.split(";")[0] : "";
+}
+
+function updateSessionCookie(response) {
+  const cookie = extractCookie(response);
+  if (cookie) sessionCookie = cookie;
+}
+
+function extractCsrfToken(html) {
+  const match = html.match(/name="_csrf"\s+value="([^"]+)"/);
+  if (!match) {
+    throw new Error("Login page did not include a CSRF token.");
   }
-  return setCookie.split(";")[0];
+  return match[1];
 }
 
 async function request(path, options = {}) {
-  return fetch(`${baseUrl}${path}`, {
+  const headers = new Headers(options.headers || {});
+  if (sessionCookie && !headers.has("Cookie")) {
+    headers.set("Cookie", sessionCookie);
+  }
+
+  const response = await fetch(`${baseUrl}${path}`, {
     redirect: "manual",
+    headers,
     ...options
   });
+  updateSessionCookie(response);
+  return response;
 }
 
 async function main() {
@@ -60,33 +79,44 @@ async function main() {
   if (!loginPage.ok) {
     throw new Error(`GET /login returned ${loginPage.status}.`);
   }
+  const loginHtml = await loginPage.text();
+  const csrfToken = extractCsrfToken(loginHtml);
+  if (!sessionCookie) {
+    throw new Error("GET /login did not include a session cookie.");
+  }
 
   const loginResponse = await request("/login", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ username: "admin", password: "admin123" }).toString()
+    body: new URLSearchParams({
+      _csrf: csrfToken,
+      username: "admin",
+      password: "admin123"
+    }).toString()
   });
 
   if (loginResponse.status !== 302) {
     throw new Error(`POST /login returned ${loginResponse.status} instead of 302.`);
   }
-
-  const cookie = extractCookie(loginResponse);
+  const loginLocation = loginResponse.headers.get("location");
+  if (loginLocation !== "/") {
+    throw new Error(`POST /login redirected to ${loginLocation || "(missing location)"} instead of /.`);
+  }
   const authenticatedPaths = ["/", "/inventory", "/sales", "/reports", "/best-selling", "/settings"];
 
   for (const path of authenticatedPaths) {
-    const response = await request(path, { headers: { Cookie: cookie } });
+    const response = await request(path);
     if (!response.ok) {
       throw new Error(`${path} returned ${response.status}.`);
     }
   }
 
-  const inventoryCsv = await request("/settings/export/inventory.csv", { headers: { Cookie: cookie } });
+  const inventoryCsv = await request("/settings/export/inventory.csv");
   if (!inventoryCsv.ok) {
     throw new Error(`/settings/export/inventory.csv returned ${inventoryCsv.status}.`);
   }
 
-  const salesCsv = await request("/settings/export/sales.csv", { headers: { Cookie: cookie } });
+  const salesCsv = await request("/settings/export/sales.csv");
   if (!salesCsv.ok) {
     throw new Error(`/settings/export/sales.csv returned ${salesCsv.status}.`);
   }

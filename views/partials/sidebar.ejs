@@ -23,8 +23,8 @@
       <a class="nav-link <%= currentPath === '/' ? 'active' : '' %>" href="/"><i class="bi bi-grid"></i>Dashboard</a>
       <a class="nav-link <%= currentPath.startsWith('/inventory') ? 'active' : '' %>" href="/inventory"><i class="bi bi-box-seam"></i>Inventory</a>
       <a class="nav-link <%= currentPath.startsWith('/eload') ? 'active' : '' %>" href="/eload"><i class="bi bi-phone"></i>Eload</a>
+      <a class="nav-link <%= currentPath.startsWith('/sales') ? 'active' : '' %>" href="/sales"><i class="bi bi-cart3"></i>Sales</a>
       <% if (user && user.role === "Admin") { %>
-        <a class="nav-link <%= currentPath.startsWith('/sales') ? 'active' : '' %>" href="/sales"><i class="bi bi-cart3"></i>Sales</a>
         <a class="nav-link <%= currentPath.startsWith('/logs') ? 'active' : '' %>" href="/logs"><i class="bi bi-journal-text"></i>Logs</a>
         <a class="nav-link <%= currentPath.startsWith('/reports') ? 'active' : '' %>" href="/reports"><i class="bi bi-bar-chart-line"></i>Reports</a>
         <a class="nav-link <%= currentPath.startsWith('/users') ? 'active' : '' %>" href="/users"><i class="bi bi-people"></i>User Accounts</a>

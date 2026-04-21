@@ -75,12 +75,6 @@ export function verifyPin(pin, stored) {
   return verifyPassword(pin, stored);
 }
 
-export function computeStatus(stockQuantity, reorderLevel) {
-  if (stockQuantity <= 0) return "Out of Stock";
-  if (stockQuantity <= reorderLevel) return "Low Stock";
-  return "In Stock";
-}
-
 function normalizeItemStatus(value) {
   const normalized = String(value || "").trim().toLowerCase();
   if (normalized === "low stock" || normalized === "low-stock") return "Low Stock";
@@ -88,11 +82,10 @@ function normalizeItemStatus(value) {
   return "In Stock";
 }
 
-function deriveStockValues(status) {
-  const normalizedStatus = normalizeItemStatus(status);
-  if (normalizedStatus === "Out of Stock") return { stockQuantity: 0, reorderLevel: 10 };
-  if (normalizedStatus === "Low Stock") return { stockQuantity: 5, reorderLevel: 10 };
-  return { stockQuantity: 20, reorderLevel: 10 };
+function deriveLegacyStatus(stockQuantity, reorderLevel) {
+  if (stockQuantity <= 0) return "Out of Stock";
+  if (stockQuantity <= reorderLevel) return "Low Stock";
+  return "In Stock";
 }
 
 function createSchema() {
@@ -138,6 +131,21 @@ function createSchema() {
       FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
       FOREIGN KEY (inventory_item_id) REFERENCES inventory_items(id) ON DELETE RESTRICT
     );
+    CREATE TABLE IF NOT EXISTS sale_digital_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sale_id INTEGER NOT NULL,
+      service_type TEXT NOT NULL DEFAULT 'eload',
+      request_code TEXT NOT NULL DEFAULT '',
+      mobile_number TEXT NOT NULL DEFAULT '',
+      network TEXT NOT NULL DEFAULT '',
+      load_type TEXT NOT NULL DEFAULT '',
+      load_value TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      quantity INTEGER NOT NULL DEFAULT 1,
+      price REAL NOT NULL DEFAULT 0,
+      total REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE
+    );
     CREATE TABLE IF NOT EXISTS Products_Log (
       Log_ID INTEGER PRIMARY KEY AUTOINCREMENT,
       Transaction_Code TEXT NOT NULL,
@@ -178,6 +186,28 @@ function createSchema() {
       Sale_Date TEXT NOT NULL,
       Time_Stamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS digital_service_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      request_code TEXT NOT NULL UNIQUE,
+      service_type TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'Pending',
+      mobile_number TEXT NOT NULL DEFAULT '',
+      amount REAL NOT NULL DEFAULT 0,
+      request_kind TEXT NOT NULL DEFAULT '',
+      network TEXT NOT NULL DEFAULT '',
+      load_type TEXT NOT NULL DEFAULT '',
+      load_value TEXT NOT NULL DEFAULT '',
+      reference_no TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      requested_by_user_id INTEGER,
+      requested_by_name TEXT NOT NULL DEFAULT '',
+      requested_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      completed_by_user_id INTEGER,
+      completed_by_name TEXT NOT NULL DEFAULT '',
+      completed_at TEXT,
+      FOREIGN KEY (requested_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (completed_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
     CREATE TABLE IF NOT EXISTS store_settings (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       store_name TEXT NOT NULL,
@@ -213,40 +243,55 @@ function ensureInventorySchema() {
     const existingItems = db.prepare("SELECT id, stock_quantity, reorder_level FROM inventory_items").all();
     const updateStatus = db.prepare("UPDATE inventory_items SET status = ? WHERE id = ?");
     for (const item of existingItems) {
-      updateStatus.run(computeStatus(item.stock_quantity, item.reorder_level), item.id);
+      updateStatus.run(deriveLegacyStatus(item.stock_quantity, item.reorder_level), item.id);
     }
   }
 }
 
-export function createSale({ saleDate, paymentMethod, items, skipStockValidation = false, employeeName = "System", number = "", referenceNo = "" }) {
+function nextDigitalServiceRequestCode(serviceType) {
+  const prefix = String(serviceType || "").toLowerCase() === "gcash" ? "GC" : "EL";
+  const count = db.prepare("SELECT COUNT(*) AS count FROM digital_service_requests WHERE service_type = ?").get(serviceType).count + 1;
+  return `${prefix}${String(count).padStart(4, "0")}`;
+}
+
+export function createSale({ saleDate, paymentMethod, items, digitalItems = [], skipStockValidation = false, employeeName = "System", number = "", referenceNo = "", requestedByUserId = null, completedByUserId = null }) {
   const insertSale = db.prepare(`INSERT INTO sales (transaction_code, sale_date, payment_method, total_amount) VALUES (?, ?, ?, ?)`);
   const insertSaleItem = db.prepare(`INSERT INTO sale_items (sale_id, inventory_item_id, item_name, quantity, price, total) VALUES (?, ?, ?, ?, ?, ?)`);
-  const updateStock = db.prepare(`UPDATE inventory_items SET stock_quantity = stock_quantity - ? WHERE id = ?`);
+  const insertDigitalSaleItem = db.prepare(`
+    INSERT INTO sale_digital_items (sale_id, service_type, request_code, mobile_number, network, load_type, load_value, notes, quantity, price, total)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
   const insertProductsLog = db.prepare(`INSERT INTO Products_Log (Transaction_Code, Total_Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?)`);
   const insertSellingLogItem = db.prepare(`INSERT INTO Selling_Log_Items (Log_ID, Product_ID, Item_Name, Quantity, Selling_Price) VALUES (?, ?, ?, ?, ?)`);
   const insertGcashLog = db.prepare(`INSERT INTO GCash_Log (Transaction_Code, Number, Reference_No, Cash_IN_OUT, Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?, ?, ?, ?)`);
   const insertEloadLog = db.prepare(`INSERT INTO ELoad_Log (Transaction_Code, Number, Network, Item_Name, Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+  const insertPendingDigitalServiceRequest = db.prepare(`
+    INSERT INTO digital_service_requests
+    (request_code, service_type, status, mobile_number, amount, request_kind, network, load_type, load_value, reference_no, notes, requested_by_user_id, requested_by_name)
+    VALUES (?, ?, 'Pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
 
   const createTx = withTransaction((payload) => {
-    const totalAmount = payload.items.reduce((sum, item) => sum + item.total, 0);
+    const productSaleItems = Array.isArray(payload.items) ? payload.items : [];
+    const digitalSaleItems = Array.isArray(payload.digitalItems) ? payload.digitalItems : [];
+    const totalAmount = [...productSaleItems, ...digitalSaleItems].reduce((sum, item) => sum + Number(item.total || 0), 0);
     const saleCount = db.prepare("SELECT COUNT(*) AS count FROM sales").get().count + 1;
     const transactionCode = `S${String(saleCount).padStart(4, "0")}`;
     const saleResult = insertSale.run(transactionCode, payload.saleDate, payload.paymentMethod, totalAmount);
     const saleId = saleResult.lastInsertRowid;
     const activeEmployeeName = String(payload.employeeName || "System");
-    const productItems = [];
-    const eloadItems = [];
+      const productItems = [];
+      const eloadItems = [];
 
-    for (const item of payload.items) {
-      const currentInventory = db.prepare("SELECT id, name, category, stock_quantity FROM inventory_items WHERE id = ?").get(item.inventoryItemId);
-      if (!currentInventory) throw new Error("One of the sale items does not exist.");
-      if (!skipStockValidation && currentInventory.stock_quantity < item.quantity) {
-        throw new Error(`Not enough stock for ${currentInventory.name}.`);
-      }
-      insertSaleItem.run(saleId, item.inventoryItemId, currentInventory.name, item.quantity, item.price, item.total);
-      updateStock.run(item.quantity, item.inventoryItemId);
+      for (const item of productSaleItems) {
+        const currentInventory = db.prepare("SELECT id, name, category, status FROM inventory_items WHERE id = ?").get(item.inventoryItemId);
+        if (!currentInventory) throw new Error("One of the sale items does not exist.");
+        if (normalizeItemStatus(currentInventory.status) === "Out of Stock") {
+          throw new Error(`${currentInventory.name} is marked out of stock.`);
+        }
+        insertSaleItem.run(saleId, item.inventoryItemId, currentInventory.name, item.quantity, item.price, item.total);
 
-      const category = String(currentInventory.category || "").toLowerCase();
+        const category = String(currentInventory.category || "").toLowerCase();
       const normalizedItem = {
         inventoryItemId: currentInventory.id,
         itemName: currentInventory.name,
@@ -276,19 +321,128 @@ export function createSale({ saleDate, paymentMethod, items, skipStockValidation
     }
 
     for (const item of eloadItems) {
-      insertEloadLog.run(
-        transactionCode,
-        String(payload.number || ""),
+        insertEloadLog.run(
+          transactionCode,
+          String(payload.number || ""),
         String(item.category || item.itemName || ""),
         item.itemName,
         item.total,
         activeEmployeeName,
-        payload.saleDate
-      );
-    }
-  });
+          payload.saleDate
+        );
+      }
 
-  createTx({ saleDate, paymentMethod, items, employeeName, number, referenceNo });
+      for (const item of digitalSaleItems) {
+        const mobileNumber = String(item.mobileNumber || payload.number || "").trim();
+        const network = String(item.network || "").trim();
+        const loadType = String(item.loadType || "").trim();
+        const loadValue = String(item.loadValue || "").trim();
+        const notes = String(item.notes || "").trim();
+        const quantity = Math.max(1, Number(item.quantity) || 1);
+        const price = Number(item.price || 0);
+        const total = Number(item.total || price * quantity);
+        if (!mobileNumber) throw new Error("Digital service item is missing a mobile number.");
+        if (!network) throw new Error("Digital service item is missing a network.");
+        if (!loadValue) throw new Error("Digital service item is missing a load value.");
+        if (total <= 0) throw new Error("Digital service amount must be greater than zero.");
+
+        const requestCode = nextDigitalServiceRequestCode("eload");
+        insertPendingDigitalServiceRequest.run(
+          requestCode,
+          "eload",
+          mobileNumber,
+          total,
+          "",
+          network,
+          loadType,
+          loadValue,
+          "",
+          notes,
+          payload.requestedByUserId ? Number(payload.requestedByUserId) : null,
+          activeEmployeeName
+        );
+        insertDigitalSaleItem.run(
+          saleId,
+          "eload",
+          requestCode,
+          mobileNumber,
+          network,
+          loadType,
+          loadValue,
+          notes,
+          quantity,
+          price,
+          total
+        );
+        insertEloadLog.run(transactionCode, mobileNumber, network, loadValue, total, activeEmployeeName, payload.saleDate);
+      }
+    });
+
+    createTx({ saleDate, paymentMethod, items, digitalItems, employeeName, number, referenceNo, requestedByUserId, completedByUserId });
+  }
+
+export function createDigitalServiceRequest(input) {
+  const serviceType = String(input.serviceType || "").trim().toLowerCase() === "gcash" ? "gcash" : "eload";
+  const requestCode = nextDigitalServiceRequestCode(serviceType);
+  const amount = Number(input.amount || 0);
+  if (amount <= 0) throw new Error("Amount must be greater than zero.");
+
+  db.prepare(`
+    INSERT INTO digital_service_requests
+    (request_code, service_type, status, mobile_number, amount, request_kind, network, load_type, load_value, reference_no, notes, requested_by_user_id, requested_by_name)
+    VALUES (?, ?, 'Pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    requestCode,
+    serviceType,
+    String(input.mobileNumber || "").trim(),
+    amount,
+    String(input.requestKind || "").trim(),
+    String(input.network || "").trim(),
+    String(input.loadType || "").trim(),
+    String(input.loadValue || "").trim(),
+    String(input.referenceNo || "").trim(),
+    String(input.notes || "").trim(),
+    input.requestedByUserId ? Number(input.requestedByUserId) : null,
+    String(input.requestedByName || "System").trim()
+  );
+}
+
+export function completeDigitalServiceRequest(requestId, input) {
+  const request = db.prepare("SELECT * FROM digital_service_requests WHERE id = ?").get(requestId);
+  if (!request) throw new Error("Request not found.");
+  if (request.status === "Completed") throw new Error("This request is already completed.");
+
+  const serviceType = String(request.service_type || "").toLowerCase();
+  const referenceNo = String(input.referenceNo || request.reference_no || "").trim();
+  if (serviceType === "gcash" && !referenceNo) {
+    throw new Error("GCash completion requires a reference number.");
+  }
+
+  db.prepare(`
+    UPDATE digital_service_requests
+    SET status = 'Completed',
+        reference_no = ?,
+        completed_by_user_id = ?,
+        completed_by_name = ?,
+        completed_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(
+    referenceNo,
+    input.completedByUserId ? Number(input.completedByUserId) : null,
+    String(input.completedByName || "System").trim(),
+    requestId
+  );
+}
+
+export function listDigitalServiceRequests() {
+  return db.prepare(`
+    SELECT *
+    FROM digital_service_requests
+    ORDER BY CASE WHEN status = 'Pending' THEN 0 ELSE 1 END, requested_at DESC, id DESC
+  `).all().map((row) => ({
+    ...row,
+    amount: Number(row.amount || 0)
+  }));
 }
 
 function backfillLogTablesFromSales() {
@@ -501,15 +655,13 @@ export function getInventorySummary() {
 }
 
 export function addInventoryItem(input) {
-  const stockValues = deriveStockValues(input.status);
   db.prepare(`INSERT INTO inventory_items (name, category, status, stock_quantity, unit_price, selling_price, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-    .run(input.name, input.category, normalizeItemStatus(input.status), stockValues.stockQuantity, Number(input.unitPrice), Number(input.sellingPrice), stockValues.reorderLevel);
+    .run(input.name, input.category, normalizeItemStatus(input.status), 0, Number(input.unitPrice), Number(input.sellingPrice), 0);
 }
 
 export function updateInventoryItem(id, input) {
-  const stockValues = deriveStockValues(input.status);
   db.prepare(`UPDATE inventory_items SET name = ?, category = ?, status = ?, stock_quantity = ?, unit_price = ?, selling_price = ?, reorder_level = ? WHERE id = ?`)
-    .run(input.name, input.category, normalizeItemStatus(input.status), stockValues.stockQuantity, Number(input.unitPrice), Number(input.sellingPrice), stockValues.reorderLevel, id);
+    .run(input.name, input.category, normalizeItemStatus(input.status), 0, Number(input.unitPrice), Number(input.sellingPrice), 0, id);
 }
 
 export function deleteInventoryItem(id) {
@@ -534,7 +686,31 @@ export function listSales(filter = "all") {
 
   const sales = db.prepare(`SELECT * FROM sales ${clause} ORDER BY sale_date DESC, id DESC`).all(...params);
   const itemStmt = db.prepare(`SELECT inventory_item_id, item_name, quantity, price, total FROM sale_items WHERE sale_id = ?`);
-  return sales.map((sale) => ({ ...sale, items: itemStmt.all(sale.id) }));
+  const digitalItemStmt = db.prepare(`
+    SELECT request_code, mobile_number, network, load_type, load_value, notes, quantity, price, total, service_type
+    FROM sale_digital_items
+    WHERE sale_id = ?
+  `);
+  return sales.map((sale) => ({
+    ...sale,
+    items: [
+      ...itemStmt.all(sale.id).map((item) => ({ ...item, item_type: "inventory" })),
+      ...digitalItemStmt.all(sale.id).map((item) => ({
+        inventory_item_id: null,
+        item_name: item.load_value,
+        quantity: Number(item.quantity || 0),
+        price: Number(item.price || 0),
+        total: Number(item.total || 0),
+        item_type: "eload",
+        request_code: item.request_code,
+        mobile_number: item.mobile_number,
+        network: item.network,
+        load_type: item.load_type,
+        notes: item.notes,
+        service_type: item.service_type
+      }))
+    ]
+  }));
 }
 
 export function getSalesMetrics() {
@@ -557,7 +733,7 @@ export function getSalesMetrics() {
 }
 
 export function getQuickSaleRecommendations() {
-  const availableItems = listInventory("").filter((item) => item.stock_quantity > 0);
+  const availableItems = listInventory("").filter((item) => normalizeItemStatus(item.status) !== "Out of Stock");
   const itemsById = new Map(availableItems.map((item) => [item.id, item]));
   const allSales = listSales("all");
   const todayKey = toIsoDate(getTodayDate());
@@ -775,68 +951,52 @@ export function getLogsData(dateKey = toIsoDate(getTodayDate())) {
     };
   });
 
-  const eloadLogs = db.prepare(`
+  const digitalRequestLogs = db.prepare(`
     SELECT
-      Transaction_Code AS transactionCode,
-      Sale_Date AS date,
-      Item_Name AS itemName,
-      Network AS network,
-      Number AS number,
-      Amount AS amount,
-      Emp_Mng AS employee
-    FROM ELoad_Log
-    WHERE Sale_Date = ?
-    ORDER BY Time_Stamp DESC, Log_ID DESC
+      request_code AS requestCode,
+      service_type AS serviceType,
+      status,
+      mobile_number AS number,
+      amount,
+      request_kind AS requestKind,
+      network,
+      load_type AS loadType,
+      load_value AS loadValue,
+      reference_no AS referenceNo,
+      requested_by_name AS requestedBy,
+      requested_at AS requestedAt,
+      completed_by_name AS completedBy,
+      completed_at AS completedAt
+    FROM digital_service_requests
+    WHERE date(datetime(requested_at, '+8 hours')) = ?
+    ORDER BY requested_at DESC, id DESC
   `).all(selectedDate).map((row) => ({
     ...row,
-    amount: Number(row.amount || 0),
-    paymentMethod: "Eload"
+    amount: Number(row.amount || 0)
   }));
 
-  const gcashLogs = db.prepare(`
-    SELECT
-      GCash_Log.Transaction_Code AS transactionCode,
-      GCash_Log.Sale_Date AS date,
-      GCash_Log.Amount AS totalAmount,
-      GCash_Log.Number AS number,
-      GCash_Log.Reference_No AS referenceNo,
-      GCash_Log.Cash_IN_OUT AS cashInOut,
-      GCash_Log.Emp_Mng AS employee,
-      COALESCE(sales.total_amount, GCash_Log.Amount) AS saleTotal,
-      COALESCE((SELECT COUNT(*) FROM sale_items JOIN sales AS sale_ref ON sale_ref.id = sale_items.sale_id WHERE sale_ref.transaction_code = GCash_Log.Transaction_Code), 0) AS itemCount
-    FROM GCash_Log
-    LEFT JOIN sales ON sales.transaction_code = GCash_Log.Transaction_Code
-    WHERE GCash_Log.Sale_Date = ?
-    ORDER BY GCash_Log.Time_Stamp DESC, GCash_Log.Log_ID DESC
-  `).all(selectedDate).map((row) => {
-    const productTotal = db.prepare(`
-      SELECT COALESCE(SUM(Selling_Log_Items.Selling_Price * Selling_Log_Items.Quantity), 0) AS total
-      FROM Products_Log
-      JOIN Selling_Log_Items ON Selling_Log_Items.Log_ID = Products_Log.Log_ID
-      WHERE Products_Log.Transaction_Code = ?
-    `).get(row.transactionCode).total;
-    const eloadTotal = db.prepare(`
-      SELECT COALESCE(SUM(Amount), 0) AS total
-      FROM ELoad_Log
-      WHERE Transaction_Code = ?
-    `).get(row.transactionCode).total;
-    return {
+  const eloadLogs = digitalRequestLogs
+    .filter((row) => row.serviceType === "eload")
+    .map((row) => ({
       ...row,
-      itemCount: Number(row.itemCount || 0),
-      productTotal: Number(productTotal || 0),
-      eloadTotal: Number(eloadTotal || 0),
-      totalAmount: Number(row.totalAmount || 0)
-    };
-  });
+      paymentMethod: "Eload"
+    }));
+
+  const gcashLogs = digitalRequestLogs
+    .filter((row) => row.serviceType === "gcash")
+    .map((row) => ({
+      ...row,
+      totalAmount: Number(row.amount || 0)
+    }));
 
   return {
     selectedDate,
-      summary: {
-        productCount: productLogs.length,
-        productTotal: productLogs.reduce((sum, entry) => sum + entry.totalAmount, 0),
-        eloadCount: eloadLogs.length,
-        eloadTotal: eloadLogs.reduce((sum, entry) => sum + entry.amount, 0),
-        gcashCount: gcashLogs.length,
+    summary: {
+      productCount: productLogs.length,
+      productTotal: productLogs.reduce((sum, entry) => sum + entry.totalAmount, 0),
+      eloadCount: eloadLogs.length,
+      eloadTotal: eloadLogs.reduce((sum, entry) => sum + entry.amount, 0),
+      gcashCount: gcashLogs.length,
       gcashTotal: gcashLogs.reduce((sum, entry) => sum + entry.totalAmount, 0)
     },
     productLogs,
@@ -852,8 +1012,8 @@ function csvEscape(value) {
 
 export function exportInventoryCsv() {
   const items = listInventory("");
-  const headers = ["Name", "Category", "Stock Quantity", "Unit Price", "Selling Price", "Profit", "Status", "Reorder Level"];
-  const rows = items.map((item) => [item.name, item.category, item.stock_quantity, item.unit_price, item.selling_price, item.profit, item.status, item.reorder_level]);
+  const headers = ["Name", "Category", "Unit Price", "Selling Price", "Profit", "Status"];
+  const rows = items.map((item) => [item.name, item.category, item.unit_price, item.selling_price, item.profit, item.status]);
   return [headers, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
 }
 
