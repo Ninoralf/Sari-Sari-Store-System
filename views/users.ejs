@@ -40,17 +40,17 @@
               <span class="badge rounded-pill text-bg-success"><%= users.length %> account<%= users.length === 1 ? "" : "s" %></span>
             </div>
             <div class="accordion" id="userAccountsAccordion">
-              <% users.forEach((account, index) => { %>
+              <% users.forEach((account) => { %>
                 <div class="accordion-item border-0 mb-3 rounded-4 overflow-hidden shadow-sm">
                   <h2 class="accordion-header" id="heading-<%= account.id %>">
-                    <button class="accordion-button <%= index === 0 ? "" : "collapsed" %>" type="button" data-bs-toggle="collapse" data-bs-target="#user-<%= account.id %>">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#user-<%= account.id %>">
                       <span class="me-3">
                         <span class="fw-semibold"><%= account.full_name %></span>
                         <span class="mini-note d-block">@<%= account.username %> - <%= account.role %></span>
                       </span>
                     </button>
                   </h2>
-                  <div id="user-<%= account.id %>" class="accordion-collapse collapse <%= index === 0 ? "show" : "" %>" data-bs-parent="#userAccountsAccordion">
+                  <div id="user-<%= account.id %>" class="accordion-collapse collapse" data-bs-parent="#userAccountsAccordion">
                     <div class="accordion-body">
                       <form action="/users/<%= account.id %>/update" method="post" class="row g-3">
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">

@@ -92,9 +92,24 @@ function buildNotifications(storeSettings) {
   const notifications = [];
   const inventory = listInventory("");
   const metrics = getSalesMetrics();
-  const pendingEloadRequests = listDigitalServiceRequests().filter((request) => request.service_type === "eload" && request.status === "Pending");
+  const pendingDigitalRequests = listDigitalServiceRequests().filter((request) => request.status === "Pending");
+  const pendingEloadRequests = pendingDigitalRequests.filter((request) => request.service_type === "eload");
+  const pendingGcashRequests = pendingDigitalRequests.filter((request) => request.service_type === "gcash");
   const lowStockItems = inventory.filter((item) => item.status === "Low Stock");
   const outOfStockItems = inventory.filter((item) => item.status === "Out of Stock");
+
+  if (pendingDigitalRequests.length) {
+    const requestParts = [];
+    if (pendingEloadRequests.length) requestParts.push(`${pendingEloadRequests.length} eLoad`);
+    if (pendingGcashRequests.length) requestParts.push(`${pendingGcashRequests.length} GCash`);
+    notifications.push({
+      tone: "primary",
+      icon: "bi-bell",
+      title: "Pending digital requests",
+      message: `${requestParts.join(" and ")} request${pendingDigitalRequests.length === 1 ? "" : "s"} waiting to be completed.`,
+      link: "/eload"
+    });
+  }
 
   if (storeSettings.low_stock_alert && lowStockItems.length) {
     notifications.push({
@@ -131,16 +146,6 @@ function buildNotifications(storeSettings) {
       icon: "bi-calendar-week",
       title: "Weekly sales",
       message: `${formatCurrency(metrics.weeklyTotal)} recorded in the last 7 days.`
-    });
-  }
-
-  if (pendingEloadRequests.length) {
-    notifications.push({
-      tone: "primary",
-      icon: "bi-phone",
-      title: "Pending eLoad requests",
-      message: `${pendingEloadRequests.length} eLoad request${pendingEloadRequests.length === 1 ? "" : "s"} waiting to be completed.`,
-      link: "/eload"
     });
   }
 
