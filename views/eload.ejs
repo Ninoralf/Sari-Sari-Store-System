@@ -286,6 +286,18 @@
                       <div class="col-lg-3">
                         <button class="btn btn-success w-100">Mark as Completed</button>
                       </div>
+                      <div class="col-lg-3">
+                        <button
+                          class="btn btn-outline-danger w-100"
+                          type="button"
+                          data-bs-toggle="modal"
+                          data-bs-target="#failRequestModal"
+                          data-request-id="<%= entry.id %>"
+                          data-request-code="<%= entry.request_code %>"
+                        >
+                          Mark as Failed
+                        </button>
+                      </div>
                     </form>
                   </div>
                 <% }) %>
@@ -297,6 +309,31 @@
       </div>
     </section>
   </main>
+</div>
+<div class="modal fade" id="failRequestModal" tabindex="-1" aria-labelledby="failRequestModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" id="failRequestForm">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="modal-header">
+          <h5 class="modal-title" id="failRequestModalLabel">Mark Request as Failed</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mini-note mb-3">Please provide the reason why this request failed.</div>
+          <div class="fw-semibold mb-3" id="failRequestCodeText">Request</div>
+          <div>
+            <label class="form-label" for="failedReasonInput">Failure Reason</label>
+            <textarea class="form-control" id="failedReasonInput" name="failedReason" rows="3" placeholder="e.g. Wrong mobile number, unavailable network, customer cancelled" required></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-danger">Confirm Failed Status</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
@@ -357,6 +394,10 @@
   const gcashPreviewAmount = document.getElementById("gcashPreviewAmount");
   const loadTypeInputs = Array.from(document.querySelectorAll("input[name='loadType']"));
   const pendingRequestActionAlert = document.getElementById("pendingRequestActionAlert");
+  const failRequestModal = document.getElementById("failRequestModal");
+  const failRequestForm = document.getElementById("failRequestForm");
+  const failRequestCodeText = document.getElementById("failRequestCodeText");
+  const failedReasonInput = document.getElementById("failedReasonInput");
 
   let selectedNetwork = "";
   let selectedService = "eload";
@@ -578,6 +619,17 @@
       }
     });
   });
+
+  if (failRequestModal) {
+    failRequestModal.addEventListener("show.bs.modal", (event) => {
+      const trigger = event.relatedTarget;
+      const requestId = trigger?.dataset.requestId || "";
+      const requestCode = trigger?.dataset.requestCode || "Request";
+      failRequestForm.action = `/eload/requests/${requestId}/fail`;
+      failRequestCodeText.textContent = requestCode;
+      failedReasonInput.value = "";
+    });
+  }
 
   updateServiceCards();
   renderNetworks();

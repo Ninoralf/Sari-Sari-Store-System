@@ -11,6 +11,7 @@ import {
   createDigitalServiceRequest,
   createSale,
   deleteInventoryItem,
+  failDigitalServiceRequest,
   exportInventoryCsv,
   exportSalesCsv,
   getBestSellingData,
@@ -580,6 +581,21 @@ app.post("/eload/requests/:id/complete", requireAuth, (req, res) => {
       completedByName: currentUser?.full_name || currentUser?.username || "System"
     });
     setFlash(req, "success", "Digital service request marked as completed.");
+  } catch (error) {
+    setFlash(req, "danger", error.message);
+  }
+  res.redirect("/eload");
+});
+
+app.post("/eload/requests/:id/fail", requireAuth, (req, res) => {
+  try {
+    const currentUser = getUserById(req.session.user.id);
+    failDigitalServiceRequest(Number(req.params.id), {
+      failedReason: String(req.body.failedReason || "").trim(),
+      failedByUserId: currentUser?.id,
+      failedByName: currentUser?.full_name || currentUser?.username || "System"
+    });
+    setFlash(req, "warning", "Digital service request marked as failed.");
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
