@@ -29,7 +29,7 @@
           </div>
         </div>
       </div>
-      <div class="row g-4">
+      <div class="row g-4 mb-4">
         <div class="col-xl-6">
           <div class="content-card p-4 h-100">
             <div class="section-title mb-3"><i class="bi bi-trophy text-warning me-2"></i>Best Selling Item This Month</div>
@@ -55,6 +55,60 @@
           </div>
         </div>
       </div>
+      <div class="row g-4">
+        <div class="col-xl-6">
+          <div class="content-card p-4 h-100">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+              <div class="section-title text-success mb-0"><i class="bi bi-phone me-2"></i>Pending Eload Requests</div>
+              <a class="btn btn-sm btn-outline-success" href="/eload">Open Eload Queue</a>
+            </div>
+            <div class="vstack gap-3" id="dashboardPendingEloadList">
+              <% if (!pendingEloadRequests.length) { %>
+                <div class="mini-note text-center py-4">No pending eload requests right now.</div>
+              <% } else { %>
+                <% pendingEloadRequests.forEach((request) => { %>
+                  <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-4 p-3 text-reset text-decoration-none" href="/eload" style="background: rgba(34, 197, 94, 0.08);">
+                    <div>
+                      <div class="fw-semibold"><%= request.request_code %> | <%= request.mobile_number %></div>
+                      <div class="mini-note"><%= request.network || "No network" %> | <%= request.load_value || request.load_type || "Pending load selection" %></div>
+                    </div>
+                    <div class="text-end">
+                      <div class="fw-bold text-success"><%= formatCurrency(request.amount) %></div>
+                      <div class="mini-note">Requested by <%= request.requested_by_name || "System" %></div>
+                    </div>
+                  </a>
+                <% }) %>
+              <% } %>
+            </div>
+          </div>
+        </div>
+        <div class="col-xl-6">
+          <div class="content-card p-4 h-100">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+              <div class="section-title text-primary mb-0"><i class="bi bi-wallet2 me-2"></i>Pending GCash Requests</div>
+              <a class="btn btn-sm btn-outline-primary" href="/eload">Open GCash Queue</a>
+            </div>
+            <div class="vstack gap-3" id="dashboardPendingGcashList">
+              <% if (!pendingGcashRequests.length) { %>
+                <div class="mini-note text-center py-4">No pending GCash requests right now.</div>
+              <% } else { %>
+                <% pendingGcashRequests.forEach((request) => { %>
+                  <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-4 p-3 text-reset text-decoration-none" href="/eload" style="background: rgba(59, 130, 246, 0.08);">
+                    <div>
+                      <div class="fw-semibold"><%= request.request_code %> | <%= request.mobile_number %></div>
+                      <div class="mini-note"><%= request.request_kind || "GCash request" %> | <%= request.reference_no || "Reference pending" %></div>
+                    </div>
+                    <div class="text-end">
+                      <div class="fw-bold text-primary"><%= formatCurrency(request.amount) %></div>
+                      <div class="mini-note">Requested by <%= request.requested_by_name || "System" %></div>
+                    </div>
+                  </a>
+                <% }) %>
+              <% } %>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
 </div>
@@ -70,12 +124,23 @@
   const dashboardMetricMonthlySales = document.getElementById("dashboardMetricMonthlySales");
   const dashboardBestSellingCard = document.getElementById("dashboardBestSellingCard");
   const dashboardLowStockList = document.getElementById("dashboardLowStockList");
+  const dashboardPendingEloadList = document.getElementById("dashboardPendingEloadList");
+  const dashboardPendingGcashList = document.getElementById("dashboardPendingGcashList");
   const rootStyles = getComputedStyle(document.body);
   const lineColor = rootStyles.getPropertyValue("--line-soft").trim();
   const textColor = rootStyles.getPropertyValue("--text-muted").trim();
   const gcashBlue = rootStyles.getPropertyValue("--brand-blue").trim() || "#3b82f6";
   const loadLightGreen = "#86efac";
   const productsOrange = "#f59e0b";
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
 
   const sharedOptions = {
     responsive: true,
@@ -131,6 +196,40 @@
             <div class="text-end"><div class="fw-bold ${item.status === "Out of Stock" ? "text-danger" : "text-warning"}">${item.status}</div><div class="mini-note">Manual stock check</div></div>
           </a>
         `).join("");
+      }
+
+      if (dashboardPendingEloadList) {
+        dashboardPendingEloadList.innerHTML = payload.pendingEloadRequests.length
+          ? payload.pendingEloadRequests.map((request) => `
+            <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-4 p-3 text-reset text-decoration-none" href="/eload" style="background: rgba(34, 197, 94, 0.08);">
+              <div>
+                <div class="fw-semibold">${escapeHtml(request.request_code)} | ${escapeHtml(request.mobile_number)}</div>
+                <div class="mini-note">${escapeHtml(request.network || "No network")} | ${escapeHtml(request.load_value || request.load_type || "Pending load selection")}</div>
+              </div>
+              <div class="text-end">
+                <div class="fw-bold text-success">${new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(request.amount || 0)}</div>
+                <div class="mini-note">Requested by ${escapeHtml(request.requested_by_name || "System")}</div>
+              </div>
+            </a>
+          `).join("")
+          : `<div class="mini-note text-center py-4">No pending eload requests right now.</div>`;
+      }
+
+      if (dashboardPendingGcashList) {
+        dashboardPendingGcashList.innerHTML = payload.pendingGcashRequests.length
+          ? payload.pendingGcashRequests.map((request) => `
+            <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-4 p-3 text-reset text-decoration-none" href="/eload" style="background: rgba(59, 130, 246, 0.08);">
+              <div>
+                <div class="fw-semibold">${escapeHtml(request.request_code)} | ${escapeHtml(request.mobile_number)}</div>
+                <div class="mini-note">${escapeHtml(request.request_kind || "GCash request")} | ${escapeHtml(request.reference_no || "Reference pending")}</div>
+              </div>
+              <div class="text-end">
+                <div class="fw-bold text-primary">${new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(request.amount || 0)}</div>
+                <div class="mini-note">Requested by ${escapeHtml(request.requested_by_name || "System")}</div>
+              </div>
+            </a>
+          `).join("")
+          : `<div class="mini-note text-center py-4">No pending GCash requests right now.</div>`;
       }
     } catch (error) {
       console.error(error);

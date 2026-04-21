@@ -22,7 +22,7 @@
           <div class="col-md-6">
             <div class="input-group position-relative">
               <span class="input-group-text"><i class="bi bi-search"></i></span>
-              <input class="form-control" id="inventoryLiveSearch" name="search" value="<%= search %>" placeholder="Search items by name or category" autocomplete="off">
+              <input class="form-control" id="inventoryLiveSearch" name="search" value="<%= search %>" placeholder="Search items by name, category, or supplier" autocomplete="off">
             </div>
             <div class="pos-suggestions list-group mt-2 d-none" id="inventorySuggestions"></div>
           </div>
@@ -58,12 +58,13 @@
         <div class="mini-note mb-3 d-none" id="inventoryFilterSummary"></div>
         <div class="table-responsive">
           <table class="table align-middle">
-            <thead><tr><th>Item Name</th><th>Category</th><th class="text-end">Unit Price</th><th class="text-end">Selling Price</th><th class="text-end">Profit</th><th>Status</th><% if (user && user.role === "Admin") { %><th class="text-end">Actions</th><% } %></tr></thead>
+            <thead><tr><th>Item Name</th><th>Category</th><th>Supplier</th><th class="text-end">Unit Price</th><th class="text-end">Selling Price</th><th class="text-end">Profit</th><th>Status</th><% if (user && user.role === "Admin") { %><th class="text-end">Actions</th><% } %></tr></thead>
             <tbody id="inventoryTableBody">
               <% items.forEach((item) => { %>
-                <tr data-item-name="<%= item.name.toLowerCase() %>" data-item-category="<%= item.category.toLowerCase() %>" data-item-status="<%= item.status %>">
+                <tr data-item-name="<%= item.name.toLowerCase() %>" data-item-category="<%= item.category.toLowerCase() %>" data-item-supplier="<%= (item.supplier || '').toLowerCase() %>" data-item-status="<%= item.status %>">
                   <td class="fw-semibold"><%= item.name %></td>
                   <td><%= item.category %></td>
+                  <td><%= item.supplier || "N/A" %></td>
                   <td class="text-end"><%= formatCurrency(item.unit_price) %></td>
                   <td class="text-end"><%= formatCurrency(item.selling_price) %></td>
                   <td class="text-end text-success fw-semibold"><%= formatCurrency(item.profit) %></td>
@@ -81,7 +82,7 @@
                 </tr>
               <% }) %>
               <tr id="inventoryEmptyRow" class="<%= items.length ? 'd-none' : '' %>">
-                <td colspan="<%= user && user.role === 'Admin' ? 7 : 6 %>" class="text-center py-4 mini-note">No inventory items matched the current filters.</td>
+                <td colspan="<%= user && user.role === 'Admin' ? 8 : 7 %>" class="text-center py-4 mini-note">No inventory items matched the current filters.</td>
               </tr>
             </tbody>
           </table>
@@ -101,6 +102,7 @@
             <div class="row g-3">
               <div class="col-md-8"><label class="form-label">Item Name</label><input class="form-control" name="name" required></div>
               <div class="col-md-4"><label class="form-label">Category</label><input class="form-control" name="category" list="categoryList" required></div>
+              <div class="col-md-6"><label class="form-label">Supplier</label><input class="form-control" name="supplier" list="supplierList" placeholder="e.g. Monde Nissin Distributor"></div>
               <div class="col-md-4"><label class="form-label">Status</label><select class="form-select" name="status" required><option value="In Stock">In Stock</option><option value="Low Stock">Low Stock</option><option value="Out of Stock">Out of Stock</option></select></div>
               <div class="col-md-4"><label class="form-label">Unit Price</label><input class="form-control" type="number" step="0.01" name="unitPrice" min="0" required></div>
               <div class="col-md-4"><label class="form-label">Selling Price</label><input class="form-control" type="number" step="0.01" name="sellingPrice" min="0" required></div>
@@ -122,6 +124,7 @@
             <div class="row g-3">
               <div class="col-md-8"><label class="form-label">Item Name</label><input class="form-control" name="name" value="<%= item.name %>" required></div>
               <div class="col-md-4"><label class="form-label">Category</label><input class="form-control" name="category" list="categoryList" value="<%= item.category %>" required></div>
+              <div class="col-md-6"><label class="form-label">Supplier</label><input class="form-control" name="supplier" list="supplierList" value="<%= item.supplier || '' %>" placeholder="e.g. Monde Nissin Distributor"></div>
               <div class="col-md-4"><label class="form-label">Status</label><select class="form-select" name="status" required><option value="In Stock" <%= item.status === "In Stock" ? "selected" : "" %>>In Stock</option><option value="Low Stock" <%= item.status === "Low Stock" ? "selected" : "" %>>Low Stock</option><option value="Out of Stock" <%= item.status === "Out of Stock" ? "selected" : "" %>>Out of Stock</option></select></div>
               <div class="col-md-4"><label class="form-label">Unit Price</label><input class="form-control" type="number" step="0.01" name="unitPrice" min="0" value="<%= item.unit_price %>" required></div>
               <div class="col-md-4"><label class="form-label">Selling Price</label><input class="form-control" type="number" step="0.01" name="sellingPrice" min="0" value="<%= item.selling_price %>" required></div>
@@ -135,6 +138,7 @@
 <% }) %>
 <% } %>
 <datalist id="categoryList"><% categories.forEach((category) => { %><option value="<%= category %>"></option><% }) %></datalist>
+<datalist id="supplierList"><% suppliers.forEach((supplier) => { %><option value="<%= supplier.supplier_name %>"></option><% }) %></datalist>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
   const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
@@ -172,7 +176,7 @@
     inventorySuggestions.innerHTML = items.slice(0, 6).map((item) => `
       <button type="button" class="list-group-item list-group-item-action pos-suggestion" data-item-name="${escapeHtml(item.name)}">
         <div class="fw-semibold">${escapeHtml(item.name)}</div>
-        <div class="mini-note">${escapeHtml(item.category)} | ${escapeHtml(item.status)}</div>
+        <div class="mini-note">${escapeHtml(item.category)} | ${escapeHtml(item.supplier || "N/A")} | ${escapeHtml(item.status)}</div>
       </button>
     `).join("");
     inventorySuggestions.classList.remove("d-none");
@@ -180,7 +184,7 @@
 
   function renderInventoryRows(items) {
     if (!items.length) {
-      inventoryTableBody.innerHTML = `<tr id="inventoryEmptyRow"><td colspan="${canManageInventory ? 7 : 6}" class="text-center py-4 mini-note">No inventory items matched the current filters.</td></tr>`;
+      inventoryTableBody.innerHTML = `<tr id="inventoryEmptyRow"><td colspan="${canManageInventory ? 8 : 7}" class="text-center py-4 mini-note">No inventory items matched the current filters.</td></tr>`;
       return;
     }
 
@@ -188,6 +192,7 @@
       <tr>
         <td class="fw-semibold">${escapeHtml(item.name)}</td>
         <td>${escapeHtml(item.category)}</td>
+        <td>${escapeHtml(item.supplier || "N/A")}</td>
         <td class="text-end">${peso.format(item.unit_price)}</td>
         <td class="text-end">${peso.format(item.selling_price)}</td>
         <td class="text-end text-success fw-semibold">${peso.format(item.profit)}</td>

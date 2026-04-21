@@ -7,6 +7,7 @@ import {
   addInventoryItem,
   completeDigitalServiceRequest,
   createUserAccount,
+  createSupplier,
   createDigitalServiceRequest,
   createSale,
   deleteInventoryItem,
@@ -26,14 +27,17 @@ import {
   initializeDatabase,
   listUsers,
   listInventory,
+  listSuppliers,
   listSales,
   resetAllData,
+  deleteSupplier,
   updateUserAccount,
   updateUserPin,
   updateAppearance,
   updateInventoryItem,
   updateNotifications,
   updatePassword,
+  updateSupplier,
   updateStoreSettings,
   updateUserProfile,
   verifyPin,
@@ -357,6 +361,8 @@ app.get("/", requireAuth, (req, res) => {
     currentDateLabel: formatLongDate(isoDateToday()),
     metrics: dashboard.metrics,
     lowStockItems: dashboard.lowStockItems,
+    pendingEloadRequests: dashboard.pendingEloadRequests,
+    pendingGcashRequests: dashboard.pendingGcashRequests,
     bestSellingItem: dashboard.bestSellingItem,
     chartTitle: chartData.title,
     chartLabels: chartData.labels,
@@ -374,7 +380,9 @@ app.get("/api/dashboard/overview", requireApiAuth, (req, res) => {
   return res.json({
     metrics: dashboard.metrics,
     bestSellingItem: dashboard.bestSellingItem,
-    lowStockItems: dashboard.lowStockItems
+    lowStockItems: dashboard.lowStockItems,
+    pendingEloadRequests: dashboard.pendingEloadRequests,
+    pendingGcashRequests: dashboard.pendingGcashRequests
   });
 });
 
@@ -497,6 +505,7 @@ app.get("/inventory", requireAuth, (req, res) => {
     search,
     status,
     categories: [...new Set(listInventory("").map((item) => item.category))].sort(),
+    suppliers: listSuppliers(),
     formatCurrency
   });
 });
@@ -671,9 +680,10 @@ app.get("/best-selling", requireAuth, requireAdmin, (req, res) => {
 
 app.get("/settings", requireAuth, (req, res) => {
   const requestedTab = String(req.query.tab || "");
-  const isAdmin = req.session.user.role === "Admin";
+  const currentUser = getUserById(req.session.user.id);
+  const isAdmin = currentUser?.role === "Admin";
   const allowedTabs = isAdmin
-    ? new Set(["store", "profile", "notifications", "appearance", "data"])
+    ? new Set(["store", "profile", "notifications", "appearance", "suppliers", "data"])
     : new Set(["profile", "appearance"]);
   const activeTab = allowedTabs.has(requestedTab) ? requestedTab : (isAdmin ? "store" : "profile");
 
@@ -681,7 +691,8 @@ app.get("/settings", requireAuth, (req, res) => {
     pageTitle: "Settings",
     todayLabel: todayLabel(),
     settings: getStoreSettings(),
-    userProfile: getUserById(req.session.user.id),
+    userProfile: currentUser,
+    suppliers: isAdmin ? listSuppliers() : [],
     activeTab
   });
 });
@@ -868,6 +879,36 @@ app.post("/settings/appearance", requireAuth, (req, res) => {
   });
   setFlash(req, "success", "Appearance preferences saved.");
   res.redirect("/settings");
+});
+
+app.post("/settings/suppliers/add", requireAuth, requireAdmin, (req, res) => {
+  try {
+    createSupplier(req.body);
+    setFlash(req, "success", "Supplier added.");
+  } catch (error) {
+    setFlash(req, "danger", error.message);
+  }
+  res.redirect("/settings?tab=suppliers");
+});
+
+app.post("/settings/suppliers/:id/update", requireAuth, requireAdmin, (req, res) => {
+  try {
+    updateSupplier(Number(req.params.id), req.body);
+    setFlash(req, "success", "Supplier updated.");
+  } catch (error) {
+    setFlash(req, "danger", error.message);
+  }
+  res.redirect("/settings?tab=suppliers");
+});
+
+app.post("/settings/suppliers/:id/delete", requireAuth, requireAdmin, (req, res) => {
+  try {
+    deleteSupplier(Number(req.params.id));
+    setFlash(req, "success", "Supplier deleted.");
+  } catch (error) {
+    setFlash(req, "danger", error.message);
+  }
+  res.redirect("/settings?tab=suppliers");
 });
 
 app.get("/settings/export/inventory.csv", requireAuth, requireAdmin, (req, res) => {
