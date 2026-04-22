@@ -11,15 +11,7 @@
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#mobileSidebar" aria-label="Close menu"></button>
   </div>
   <div class="offcanvas-body d-flex flex-column p-3 p-lg-4">
-    <div class="d-none d-lg-flex align-items-center gap-3 mb-4">
-      <div class="brand-chip"><i class="bi bi-shop fs-4"></i></div>
-      <div>
-        <h1 class="h5 mb-0"><%= store.store_name %></h1>
-        <div class="mini-note">Management System</div>
-        <div class="mini-note sidebar-date-label mt-1"><%= todayLabel %></div>
-      </div>
-    </div>
-    <nav class="nav nav-pills flex-column gap-2">
+    <nav class="nav nav-pills flex-column gap-2 d-lg-none">
       <a class="nav-link <%= currentPath === '/' ? 'active' : '' %>" href="/"><i class="bi bi-grid"></i>Dashboard</a>
       <a class="nav-link <%= currentPath.startsWith('/inventory') ? 'active' : '' %>" href="/inventory"><i class="bi bi-box-seam"></i>Inventory</a>
       <a class="nav-link <%= currentPath.startsWith('/eload') ? 'active' : '' %>" href="/eload"><i class="bi bi-phone"></i>Eload</a>
@@ -30,7 +22,7 @@
         <a class="nav-link <%= currentPath.startsWith('/users') ? 'active' : '' %>" href="/users"><i class="bi bi-people"></i>User Accounts</a>
       <% } %>
     </nav>
-    <div class="mt-auto pt-4">
+    <div class="mt-auto pt-4 d-lg-none">
       <div class="content-card p-3">
         <div class="mini-note">Version 1.0.0</div>
         <div class="mini-note">Based on the Figma sari-sari store concept</div>
