@@ -200,6 +200,38 @@ body[data-color-scheme="Amber"] {
   backdrop-filter: blur(8px);
 }
 
+.topbar-brand-group {
+  min-width: 0;
+}
+
+.topbar-tabs {
+  flex: 1 1 0;
+}
+
+.topbar-tabs .nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  color: var(--text-strong);
+  border-radius: 0.9rem;
+  font-weight: 600;
+  padding: 0.8rem 1rem;
+  min-height: 3rem;
+  white-space: nowrap;
+}
+
+.topbar-tabs .nav-link > i {
+  width: 1.25rem;
+  text-align: center;
+  flex: 0 0 1.25rem;
+}
+
+.topbar-tabs .nav-link:hover,
+.topbar-tabs .nav-link.active {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand-emerald) 18%, transparent), color-mix(in srgb, var(--brand-teal) 12%, transparent));
+  color: var(--text-strong);
+}
+
 .header-menu-button {
   width: 2.75rem;
   height: 2.75rem;
@@ -738,6 +770,10 @@ body[data-color-scheme="Amber"] {
     padding-top: 1rem;
   }
 
+  .topbar-tabs {
+    display: none !important;
+  }
+
   .pos-cart-flyout {
     right: 1rem;
     bottom: 5.75rem;
@@ -752,5 +788,17 @@ body[data-color-scheme="Amber"] {
   .pos-cart-fab {
     right: 1rem;
     bottom: 1rem;
+  }
+}
+
+@media (min-width: 992px) {
+  .app-shell > .sidebar {
+    flex: 0 0 0;
+  }
+
+  .sidebar.offcanvas-lg {
+    width: 0;
+    border-right: 0;
+    overflow: hidden;
   }
 }
