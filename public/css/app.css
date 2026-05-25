@@ -2055,3 +2055,85 @@ body[data-font-size] .mini-note { font-size: 0.85em; }
     overflow: hidden;
   }
 }
+
+/* Enhanced Quick Entry Sales Styles */
+.search-glass {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 1rem;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.search-glass:focus-within {
+  border-color: var(--brand-emerald);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-emerald) 15%, transparent);
+}
+.category-pill-container::-webkit-scrollbar { display: none; }
+.btn-category {
+  border: 1px solid var(--input-border);
+  background: var(--surface-card);
+  color: var(--text-muted);
+  border-radius: 2rem;
+  padding: 0.5rem 1.25rem;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+.btn-category:hover {
+  background: var(--surface-soft);
+  color: var(--text-strong);
+}
+.btn-category.active {
+  background: var(--brand-emerald);
+  border-color: var(--brand-emerald);
+  color: white;
+  box-shadow: 0 0.5rem 1rem color-mix(in srgb, var(--brand-emerald) 25%, transparent);
+}
+.product-card {
+  background: var(--surface-card);
+  border: 1px solid var(--input-border);
+  border-radius: 1rem;
+  padding: 1rem;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+.product-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-hover);
+  border-color: var(--brand-emerald);
+}
+.category-tag {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--brand-teal);
+  font-weight: 700;
+}
+.product-name {
+  font-size: 0.95rem;
+  line-height: 1.3;
+  color: var(--text-strong);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  height: 2.6rem;
+}
+.product-price { font-size: 1.1rem; }
+.pulse-animation { animation: pulse 1s ease-in-out; }
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+
+/* Utilities for horizontal scrolling */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

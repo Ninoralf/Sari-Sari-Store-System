@@ -5,319 +5,165 @@
     <%- include("partials/topbar") %>
     <section class="p-3 p-lg-4">
       <%- include("partials/flash") %>
-      <div class="eload-page-grid">
-        <div class="eload-request-column">
-          <div class="content-card p-4">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-              <div class="d-flex flex-wrap align-items-center gap-2">
-                <div class="section-title">Digital Service Requests</div>
-                <button
-                  class="btn btn-sm eload-btn-ghost rounded-circle d-inline-flex align-items-center justify-content-center"
-                  type="button"
-                  style="width: 1.5rem; height: 1.5rem;"
-                  data-bs-toggle="tooltip"
-                  data-bs-trigger="focus"
-                  data-bs-placement="right"
-                  data-bs-title="Any user or admin can create a pending Eload or GCash request, then complete it later with a full requester/completer audit trail."
-                  aria-label="Digital service request guide"
-                >
-                  ?
-                </button>
+      <div class="row g-4">
+        <!-- Input Section -->
+        <div class="col-xl-6 mx-auto">
+          <div class="content-card p-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+              <div>
+                <div class="section-title">New Request</div>
+                <div class="mini-note mb-3">Create a new digital service transaction.</div>
               </div>
-              <span class="badge rounded-pill text-bg-light border px-3 py-2"><%= requests.filter((entry) => entry.status === "Pending").length %> pending</span>
+              <button class="btn btn-outline-warning btn-sm rounded-pill px-3 fw-bold shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#pendingQueueCollapse">
+                <i class="bi bi-clock-history me-1"></i> VIEW QUEUE (<%= requests.filter(r => r.status === 'Pending').length %>)
+              </button>
             </div>
 
-            <div class="eload-step mb-4">
-              <div class="eload-step-header">
-                <span class="eload-step-number">1</span>
-                <div>
-                  <div class="eload-step-title">Request Type</div>
-                  <div class="mini-note">Choose the digital service request to create.</div>
-                </div>
+            <!-- STEP 1 -->
+            <div class="mb-4">
+              <div class="d-flex align-items-center gap-3 mb-3">
+                <span class="badge rounded-circle bg-dark text-white d-inline-flex align-items-center justify-content-center" style="width: 28px; height: 28px;">1</span>
+                <span class="fw-bold text-uppercase small">Choose Service Type</span>
               </div>
-              <div class="eload-service-grid" id="eloadServiceGrid">
-                <button type="button" class="eload-service-card is-selected" data-service="eload" data-service-card="eload">
-                  <span class="fw-semibold fs-5">Eload Request</span>
-                  <span class="mini-note">Encode mobile number, network, and load option first, then complete the request later.</span>
-                </button>
-                <button type="button" class="eload-service-card" data-service="gcash" data-service-card="gcash">
-                  <span class="fw-semibold fs-5">GCash Request</span>
-                  <span class="mini-note">Create cash-in or cash-out requests, then complete them once the transaction reference is ready.</span>
-                </button>
+              <div class="nav nav-pills nav-fill bg-light p-1 rounded-pill" role="tablist">
+                <button class="nav-link active rounded-pill py-2 border-0" id="tab-eload" data-bs-toggle="tab" data-bs-target="#panel-eload" type="button"><i class="bi bi-phone me-2"></i>eLoad</button>
+                <button class="nav-link rounded-pill py-2 border-0" id="tab-gcash" data-bs-toggle="tab" data-bs-target="#panel-gcash" type="button"><i class="bi bi-wallet2 me-2"></i>GCash</button>
               </div>
             </div>
 
-            <div id="eloadFlowCard">
-              <form id="eloadForm" class="row g-4" method="post" action="/eload/requests" autocomplete="off">
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                <input type="hidden" name="serviceType" value="eload">
-                <input type="hidden" name="network" id="eloadNetworkValue">
-                <input type="hidden" name="loadValue" id="eloadLoadValue">
-                <input type="hidden" name="amount" id="eloadAmountValue">
+            <div class="tab-content">
+              <!-- eLoad Panel -->
+              <div class="tab-pane fade show active" id="panel-eload">
+                <form id="eloadForm" action="/eload/requests" method="post" class="row g-3">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <input type="hidden" name="serviceType" value="eload">
+                  <input type="hidden" name="network" id="eloadNetworkValue">
+                  <input type="hidden" name="loadValue" id="eloadLoadValue">
+                  <input type="hidden" name="amount" id="eloadAmountValue">
 
-                <div class="col-12">
-                  <div class="eload-step">
-                    <div class="eload-step-header">
-                      <span class="eload-step-number">2</span>
-                      <div>
-                        <div class="eload-step-title">Mobile Number</div>
-                        <div class="mini-note">Enter the customer number for the request.</div>
-                      </div>
+                  <!-- STEP 2 -->
+                  <div class="col-12">
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                      <span class="badge rounded-circle bg-dark text-white d-inline-flex align-items-center justify-content-center" style="width: 28px; height: 28px;">2</span>
+                      <span class="fw-bold text-uppercase small">Enter Mobile Number</span>
                     </div>
-                    <label class="form-label" for="eloadMobileNumber">Mobile Number</label>
-                    <button
-                      class="btn btn-sm eload-btn-ghost rounded-circle d-inline-flex align-items-center justify-content-center"
-                      type="button"
-                      style="width: 1.5rem; height: 1.5rem;"
-                      data-bs-toggle="tooltip"
-                      data-bs-trigger="focus"
-                      data-bs-placement="right"
-                      data-bs-title="Accepted format: 11-digit Philippine mobile number starting with `09`"
-                      aria-label="Mobile number format guide"
-                    >
-                      ?
-                    </button>
-                    <input class="form-control form-control-lg" id="eloadMobileNumber" name="mobileNumber" inputmode="numeric" maxlength="13" placeholder="09XX XXX XXXX" required>
+                    <div class="input-group input-group-lg shadow-sm rounded-3 overflow-hidden border">
+                      <span class="input-group-text border-0 bg-white"><i class="bi bi-phone text-muted"></i></span>
+                      <input class="form-control border-0" id="eloadMobileNumber" name="mobileNumber" inputmode="numeric" maxlength="13" placeholder="09XX XXX XXXX" required>
+                    </div>
                   </div>
-                </div>
 
-                <div class="col-12">
-                  <div class="eload-step">
-                    <div class="eload-step-header">
-                      <span class="eload-step-number">3</span>
-                      <div>
-                        <div class="eload-step-title">Network Selection</div>
-                        <div class="mini-note">Pick the network before choosing a promo.</div>
-                      </div>
+                  <!-- STEP 3 -->
+                  <div class="col-12">
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                      <span class="badge rounded-circle bg-dark text-white d-inline-flex align-items-center justify-content-center" style="width: 28px; height: 28px;">3</span>
+                      <span class="fw-bold text-uppercase small">Select Network</span>
                     </div>
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                      <label class="form-label mb-0">Choose Network</label>
-                      <div class="mini-note" id="eloadSelectedNetworkText">No network selected yet</div>
+                    <div class="row g-2" id="eloadNetworkGrid">
+                      <!-- Rendered by JS -->
                     </div>
-                    <div class="eload-network-grid" id="eloadNetworkGrid"></div>
                   </div>
-                </div>
 
-                <div class="col-12">
-                  <div class="eload-step">
-                    <div class="eload-step-header">
-                      <span class="eload-step-number">4</span>
-                      <div>
-                        <div class="eload-step-title">Load Type + Promo</div>
-                        <div class="mini-note">Select the load type, promo, and optional request notes.</div>
-                      </div>
+                  <!-- STEP 4 -->
+                  <div class="col-12">
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                      <span class="badge rounded-circle bg-dark text-white d-inline-flex align-items-center justify-content-center" style="width: 28px; height: 28px;">4</span>
+                      <span class="fw-bold text-uppercase small">Choose Load & Finish</span>
                     </div>
-                    <div class="d-flex flex-wrap gap-2 mb-3">
-                      <input class="btn-check" type="radio" name="loadType" id="eloadTypePromo" value="promo" checked>
-                      <label class="btn eload-btn-ghost rounded-pill px-4" for="eloadTypePromo">Promo Load</label>
-
-                      <input class="btn-check" type="radio" name="loadType" id="eloadTypeRegular" value="regular">
-                      <label class="btn eload-btn-ghost rounded-pill px-4" for="eloadTypeRegular">Regular Load</label>
-
-                      <input class="btn-check" type="radio" name="loadType" id="eloadTypeGcash" value="gcash">
-                      <label class="btn eload-btn-ghost rounded-pill px-4" for="eloadTypeGcash">GCash Exclusive</label>
-                    </div>
-
-                    <div class="row g-4">
-                      <div class="col-lg-7" id="eloadPromoSection">
-                        <label class="form-label" for="eloadPromoSelect">Promo Option</label>
-                        <select class="form-select" id="eloadPromoSelect"></select>
-                        <div class="mini-note mt-2" id="eloadPromoHelp">Choose a network first to see available promos.</div>
+                    <div class="bg-light p-3 rounded-4">
+                      <div class="d-flex gap-2 mb-3">
+                        <input class="btn-check" type="radio" name="loadType" id="typePromo" value="promo" checked>
+                        <label class="btn btn-outline-primary btn-sm rounded-pill px-3" for="typePromo">Promo</label>
+                        <input class="btn-check" type="radio" name="loadType" id="typeRegular" value="regular">
+                        <label class="btn btn-outline-primary btn-sm rounded-pill px-3" for="typeRegular">Regular</label>
                       </div>
-
-                      <div class="col-lg-5 d-none" id="eloadRegularSection">
-                        <label class="form-label" for="eloadRegularAmount">Regular Amount</label>
-                        <div class="input-group">
-                          <span class="input-group-text">PHP</span>
-                          <input class="form-control" id="eloadRegularAmount" type="number" min="1" step="1" placeholder="50">
-                        </div>
-                        <div class="mini-note mt-2">Enter any whole-number load amount.</div>
-                      </div>
-
-                      <div class="col-lg-7 d-none" id="eloadGcashSection">
-                        <label class="form-label" for="eloadGcashSelect">GCash Exclusive Option</label>
-                        <select class="form-select" id="eloadGcashSelect">
-                          <option value="GCash Exclusive 50">GCash Exclusive 50</option>
-                          <option value="GCash Exclusive 99">GCash Exclusive 99</option>
-                          <option value="GCash Exclusive 150">GCash Exclusive 150</option>
-                          <option value="GCash Exclusive 299">GCash Exclusive 299</option>
+                      
+                      <div id="promoGroup">
+                        <select class="form-select border-0 shadow-sm" id="eloadPromoSelect" disabled>
+                          <option value="">Choose network first</option>
                         </select>
-                        <div class="mini-note mt-2">Special GCash-only offers for digital wallet load purchases.</div>
                       </div>
-                    </div>
-
-                    <div class="mt-4">
-                      <label class="form-label" for="eloadNotes">Request Notes</label>
-                      <textarea class="form-control" id="eloadNotes" name="notes" rows="2" placeholder="Optional notes for the staff who will complete this request."></textarea>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="col-12">
-                  <div class="eload-step">
-                    <div class="eload-step-header">
-                      <span class="eload-step-number">5</span>
-                      <div>
-                        <div class="eload-step-title">Preview Card</div>
-                        <div class="mini-note">Review the request before saving it.</div>
-                      </div>
-                    </div>
-                    <div class="eload-preview p-4 rounded-4">
-                      <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
-                        <div>
-                          <div class="mini-note">Request Preview</div>
-                          <div class="h4 mb-1" id="eloadPreviewTitle">Ready to create eload request</div>
-                          <div class="mini-note" id="eloadPreviewSubtitle">Complete the fields to preview the selected load request.</div>
-                        </div>
-                        <div class="badge rounded-pill text-bg-success px-3 py-2" id="eloadPreviewMode">Promo</div>
-                      </div>
-                      <div class="row g-3 mt-1">
-                        <div class="col-md-3">
-                          <div class="mini-note">Number</div>
-                          <div class="fw-semibold" id="eloadPreviewNumber">09XX XXX XXXX</div>
-                        </div>
-                        <div class="col-md-3">
-                          <div class="mini-note">Network</div>
-                          <div class="fw-semibold" id="eloadPreviewNetwork">Select network</div>
-                        </div>
-                        <div class="col-md-3">
-                          <div class="mini-note">Selected Load</div>
-                          <div class="fw-semibold" id="eloadPreviewValue">Choose an option</div>
-                        </div>
-                        <div class="col-md-3">
-                          <div class="mini-note">Amount</div>
-                          <div class="fw-semibold" id="eloadPreviewAmount">PHP 0.00</div>
+                      
+                      <div id="regularGroup" class="d-none">
+                        <div class="input-group shadow-sm">
+                          <span class="input-group-text border-0 bg-white">₱</span>
+                          <input class="form-control border-0" id="eloadRegularAmount" type="number" min="1" placeholder="Enter amount">
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                <div class="col-12">
-                  <div class="eload-step">
-                    <div class="eload-step-header">
-                      <span class="eload-step-number">6</span>
-                      <div>
-                        <div class="eload-step-title">CTA Buttons</div>
-                        <div class="mini-note">Create a pending request or send it to the sales cart.</div>
-                      </div>
-                    </div>
-                    <div id="eloadActionAlert"></div>
-                    <div class="d-flex flex-wrap gap-2">
-                      <button class="btn eload-btn-primary px-4" type="submit">Create Eload Request</button>
-                      <button class="btn eload-btn-secondary px-4" type="button" id="eloadAddToCartButton">Add to Cart</button>
+                  <div class="col-12">
+                    <label class="form-label fw-bold small">Notes (Optional)</label>
+                    <textarea class="form-control bg-light border-0" name="notes" rows="2" placeholder="e.g. 'Wait for confirmation'"></textarea>
+                  </div>
+
+                  <div class="col-12 mt-4">
+                    <div class="d-flex gap-2">
+                      <button class="btn btn-primary flex-grow-1 py-3 fw-bold rounded-3 shadow-sm" type="submit">QUEUE REQUEST</button>
+                      <button class="btn btn-success px-4 rounded-3 shadow-sm" type="button" id="eloadAddToCartButton" title="Add to POS Cart"><i class="bi bi-cart-plus fs-4"></i></button>
                     </div>
                   </div>
-                </div>
-              </form>
-            </div>
+                </form>
+              </div>
 
-            <div id="gcashFlowCard" class="d-none">
-              <div class="content-card border-0 shadow-none p-0">
-                <form id="gcashForm" class="row g-4" method="post" action="/eload/requests" autocomplete="off">
+              <!-- GCash Panel -->
+              <div class="tab-pane fade" id="panel-gcash">
+                <form id="gcashForm" action="/eload/requests" method="post" class="row g-3">
                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                   <input type="hidden" name="serviceType" value="gcash">
 
+                  <!-- STEP 2 -->
                   <div class="col-12">
-                    <div class="eload-step">
-                      <div class="eload-step-header">
-                        <span class="eload-step-number">2</span>
-                        <div>
-                          <div class="eload-step-title">Mobile Number</div>
-                          <div class="mini-note">Enter the GCash number and optional reference.</div>
-                        </div>
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                      <span class="badge rounded-circle bg-dark text-white d-inline-flex align-items-center justify-content-center" style="width: 28px; height: 28px;">2</span>
+                      <span class="fw-bold text-uppercase small">Choose Transaction Flow</span>
+                    </div>
+                    <div class="d-flex gap-2 p-1 bg-light rounded-pill">
+                      <input class="btn-check" type="radio" name="cashFlow" id="flowIn" value="Cash In" checked>
+                      <label class="btn btn-white btn-sm flex-grow-1 rounded-pill border-0 py-2 shadow-sm" for="flowIn">CASH IN</label>
+                      <input class="btn-check" type="radio" name="cashFlow" id="flowOut" value="Cash Out">
+                      <label class="btn btn-white btn-sm flex-grow-1 rounded-pill border-0 py-2 shadow-sm" for="flowOut">CASH OUT</label>
+                    </div>
+                  </div>
+
+                  <!-- STEP 3 -->
+                  <div class="col-12">
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                      <span class="badge rounded-circle bg-dark text-white d-inline-flex align-items-center justify-content-center" style="width: 28px; height: 28px;">3</span>
+                      <span class="fw-bold text-uppercase small">Enter GCash Details</span>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label small fw-bold">Mobile Number</label>
+                      <div class="input-group input-group-lg shadow-sm rounded-3 overflow-hidden border">
+                        <span class="input-group-text border-0 bg-white"><i class="bi bi-wallet2 text-muted"></i></span>
+                        <input class="form-control border-0" id="gcashMobileNumber" name="mobileNumber" inputmode="numeric" maxlength="13" placeholder="09XX XXX XXXX" required>
                       </div>
-                      <div class="row g-4">
-                        <div class="col-md-6">
-                          <label class="form-label" for="gcashMobileNumber">GCash Number</label>
-                          <input class="form-control form-control-lg" id="gcashMobileNumber" name="mobileNumber" inputmode="numeric" maxlength="13" placeholder="09XX XXX XXXX" required>
-                        </div>
-                        <div class="col-md-6">
-                          <label class="form-label" for="gcashReferenceNumber">Reference Number</label>
-                          <input class="form-control form-control-lg" id="gcashReferenceNumber" name="referenceNumber" placeholder="Optional when creating, required when completing">
-                        </div>
+                    </div>
+                    <div>
+                      <label class="form-label small fw-bold">Amount</label>
+                      <div class="input-group input-group-lg shadow-sm rounded-3 overflow-hidden border">
+                        <span class="input-group-text border-0 bg-white">₱</span>
+                        <input class="form-control border-0" name="amount" type="number" min="1" step="1" placeholder="0.00" required>
                       </div>
                     </div>
                   </div>
 
+                  <!-- STEP 4 -->
                   <div class="col-12">
-                    <div class="eload-step">
-                      <div class="eload-step-header">
-                        <span class="eload-step-number">3</span>
-                        <div>
-                          <div class="eload-step-title">Cash Flow + Amount</div>
-                          <div class="mini-note">Select cash in or cash out, then enter the amount.</div>
-                        </div>
-                      </div>
-                      <div class="row g-4">
-                        <div class="col-md-6">
-                          <label class="form-label" for="gcashCashFlow">Cash Flow</label>
-                          <select class="form-select form-select-lg" id="gcashCashFlow" name="cashFlow">
-                            <option value="Cash In">Cash In</option>
-                            <option value="Cash Out">Cash Out</option>
-                          </select>
-                        </div>
-                        <div class="col-md-6">
-                          <label class="form-label" for="gcashAmount">Amount</label>
-                          <div class="input-group input-group-lg">
-                            <span class="input-group-text">PHP</span>
-                            <input class="form-control" id="gcashAmount" name="amount" type="number" min="1" step="1" placeholder="100" required>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="mt-4">
-                        <label class="form-label" for="gcashNotes">Request Notes</label>
-                        <textarea class="form-control" id="gcashNotes" name="notes" rows="2" placeholder="Optional reminder or instruction for the completing staff."></textarea>
-                      </div>
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                      <span class="badge rounded-circle bg-dark text-white d-inline-flex align-items-center justify-content-center" style="width: 28px; height: 28px;">4</span>
+                      <span class="fw-bold text-uppercase small">Additional Info & Finish</span>
                     </div>
-                  </div>
-
-                  <div class="col-12">
-                    <div class="eload-step">
-                      <div class="eload-step-header">
-                        <span class="eload-step-number">4</span>
-                        <div>
-                          <div class="eload-step-title">Preview Card</div>
-                          <div class="mini-note">Review the GCash request before saving it.</div>
-                        </div>
-                      </div>
-                      <div class="eload-preview p-4 rounded-4">
-                        <div class="mini-note">GCash Request Preview</div>
-                        <div class="h4 mb-1" id="gcashPreviewTitle">Ready to create GCash request</div>
-                        <div class="mini-note mb-3" id="gcashPreviewSubtitle">Complete the fields to preview the request details.</div>
-                        <div class="row g-3">
-                          <div class="col-md-3">
-                            <div class="mini-note">Number</div>
-                            <div class="fw-semibold" id="gcashPreviewNumber">09XX XXX XXXX</div>
-                          </div>
-                          <div class="col-md-3">
-                            <div class="mini-note">Reference</div>
-                            <div class="fw-semibold" id="gcashPreviewReference">Pending</div>
-                          </div>
-                          <div class="col-md-3">
-                            <div class="mini-note">Flow</div>
-                            <div class="fw-semibold" id="gcashPreviewFlow">Cash In</div>
-                          </div>
-                          <div class="col-md-3">
-                            <div class="mini-note">Amount</div>
-                            <div class="fw-semibold" id="gcashPreviewAmount">PHP 0.00</div>
-                          </div>
-                        </div>
-                      </div>
+                    <div class="mb-3">
+                      <label class="form-label small fw-bold">Reference Number (Optional)</label>
+                      <input class="form-control bg-light border-0 py-2" name="referenceNumber" placeholder="Enter if already known">
                     </div>
-                  </div>
-
-                  <div class="col-12">
-                    <div class="eload-step">
-                      <div class="eload-step-header">
-                        <span class="eload-step-number">5</span>
-                        <div>
-                          <div class="eload-step-title">CTA Button</div>
-                          <div class="mini-note">Create a pending GCash request.</div>
-                        </div>
-                      </div>
-                      <button class="btn eload-btn-primary px-4" type="submit">Create GCash Request</button>
+                    <div class="mb-3">
+                      <label class="form-label small fw-bold">Notes (Optional)</label>
+                      <textarea class="form-control bg-light border-0" name="notes" rows="2" placeholder="e.g. 'Customer is at the store'"></textarea>
                     </div>
+                    <button class="btn btn-primary w-100 py-3 fw-bold rounded-3 shadow-sm" type="submit">QUEUE GCASH REQUEST</button>
                   </div>
                 </form>
               </div>
@@ -325,104 +171,81 @@
           </div>
         </div>
 
-        <div class="eload-pending-column">
-          <div class="content-card p-4">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+        <!-- Pending Queue Section (Hidden by Default) -->
+        <div class="col-12 collapse mt-4" id="pendingQueueCollapse">
+          <div class="content-card p-4 bg-light-subtle">
+            <div class="d-flex justify-content-between align-items-center mb-4">
               <div>
-                <div class="section-title">Pending Requests</div>
-                <div class="mini-note">Open requests can be completed by any logged-in user or admin.</div>
+                <div class="section-title">Pending Queue</div>
+                <div class="mini-note">Requests waiting for fulfillment.</div>
               </div>
-              <span class="badge rounded-pill text-bg-warning"><%= requests.filter((entry) => entry.status === "Pending").length %> open</span>
+              <button class="btn-close" type="button" data-bs-toggle="collapse" data-bs-target="#pendingQueueCollapse"></button>
             </div>
-            <div id="pendingRequestActionAlert" class="mb-3"></div>
-
-            <% const pendingRequests = requests.filter((entry) => entry.status === "Pending"); %>
-            <% if (!pendingRequests.length) { %>
-              <div class="mini-note text-center py-4">No pending digital service requests right now.</div>
-            <% } else { %>
-              <div class="vstack gap-3">
-                <% pendingRequests.forEach((entry) => { %>
-                  <div class="border rounded-4 p-3 p-lg-4">
-                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+            
+            <!-- (Queue content remains same as before) -->
+            <div class="row g-3" id="pendingQueueList">
+              <% const pending = requests.filter(r => r.status === 'Pending'); %>
+              <% if (!pending.length) { %>
+                <div class="text-center py-5 opacity-50">
+                  <i class="bi bi-hourglass-split display-1 d-block mb-3"></i>
+                  <div class="fw-bold">Queue is empty</div>
+                  <div class="mini-note">All digital services are up to date.</div>
+                </div>
+              <% } else { %>
+                <% pending.forEach(req => { %>
+                  <div class="request-card p-3 bg-white rounded-4 border shadow-sm border-start border-4 <%= req.service_type === 'gcash' ? 'border-primary' : 'border-success' %>">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
                       <div>
-                        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
-                          <span class="fw-semibold"><%= entry.request_code %></span>
-                          <span class="badge <%= entry.service_type === "gcash" ? "text-bg-primary" : "text-bg-success" %>"><%= entry.service_type === "gcash" ? "GCash" : "Eload" %></span>
-                          <span class="badge text-bg-warning">Pending</span>
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                          <span class="badge <%= req.service_type === 'gcash' ? 'bg-primary' : 'bg-success' %> text-uppercase small"><%= req.service_type %></span>
+                          <span class="fw-bold text-dark"><%= req.request_code %></span>
                         </div>
-                        <div class="mini-note">
-                          Requested by <strong><%= entry.requested_by_name %></strong> on <strong><%= formatDateTime(entry.requested_at) %></strong>
-                        </div>
-                        </div>
-                        <div class="text-lg-end">
-                          <div class="fw-semibold text-success"><%= formatCurrency(entry.amount) %></div>
-                          <div class="d-inline-flex align-items-center gap-2">
-                            <div class="mini-note mb-0"><%= entry.mobile_number %></div>
-                            <button
-                              class="btn btn-sm eload-btn-ghost pending-request-copy"
-                              type="button"
-                              data-copy-number="<%= entry.mobile_number %>"
-                              aria-label="Copy mobile number"
-                            >
-                              <i class="bi bi-clipboard"></i>
-                            </button>
-                          </div>
-                        </div>
+                        <div class="h5 mb-0 fw-bold font-monospace"><%= req.mobile_number %></div>
+                        <div class="mini-note text-muted"><%= req.service_type === 'gcash' ? req.request_kind : `${req.network} | ${req.load_value}` %></div>
                       </div>
-
-                    <div class="row g-3 mb-3">
-                      <div class="col-6">
-                        <div class="mini-note">Request Type</div>
-                        <div class="fw-semibold"><%= entry.service_type === "gcash" ? entry.request_kind : entry.load_type %></div>
-                      </div>
-                      <div class="col-6">
-                        <div class="mini-note"><%= entry.service_type === "gcash" ? "Reference" : "Network" %></div>
-                        <div class="fw-semibold"><%= entry.service_type === "gcash" ? (entry.reference_no || "Pending") : entry.network %></div>
-                      </div>
-                      <div class="col-6">
-                        <div class="mini-note"><%= entry.service_type === "gcash" ? "Status" : "Load Value" %></div>
-                        <div class="fw-semibold"><%= entry.service_type === "gcash" ? entry.status : entry.load_value %></div>
-                      </div>
-                      <div class="col-6">
-                        <div class="mini-note">Notes</div>
-                        <div class="fw-semibold"><%= entry.notes || "-" %></div>
+                      <div class="text-end">
+                        <div class="h4 mb-0 fw-bold text-success">₱<%= req.amount.toLocaleString() %></div>
+                        <div class="mini-note">by <%= req.requested_by_name %></div>
                       </div>
                     </div>
 
-                    <form method="post" action="/eload/requests/<%= entry.id %>/complete" class="row g-3 align-items-end">
-                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                      <% if (entry.service_type === "gcash") { %>
-                        <div class="col-12">
-                          <label class="form-label">Reference Number</label>
-                          <input class="form-control" name="referenceNumber" value="<%= entry.reference_no %>" placeholder="Required to complete GCash" required>
-                        </div>
-                      <% } else { %>
-                        <div class="col-12">
-                          <div class="mini-note">Completing this eload request will stamp who completed it and the exact date/time.</div>
-                        </div>
-                      <% } %>
-                      <div class="col-12">
-                        <button class="btn eload-btn-primary w-100">Mark as Completed</button>
+                    <% if (req.notes) { %>
+                      <div class="bg-light p-2 rounded mb-3 border-start border-3 border-warning">
+                        <div class="mini-note fw-bold text-warning-emphasis">STAF NOTE:</div>
+                        <div class="small"><%= req.notes %></div>
                       </div>
-                      <div class="col-12">
-                        <button
-                          class="btn btn-outline-danger w-100"
-                          type="button"
-                          data-bs-toggle="modal"
-                          data-bs-target="#failRequestModal"
-                          data-request-id="<%= entry.id %>"
-                          data-request-code="<%= entry.request_code %>"
-                        >
-                          Mark as Failed
-                        </button>
-                      </div>
-                    </form>
+                    <% } %>
+
+                    <div class="d-flex gap-2">
+                      <button class="btn btn-sm btn-dark flex-grow-1 py-2 fw-bold rounded-pill" data-bs-toggle="collapse" data-bs-target="#complete-<%= req.id %>">
+                        <i class="bi bi-check2-circle me-1"></i>FULFILL
+                      </button>
+                      <button class="btn btn-sm btn-outline-danger px-3 rounded-pill" data-bs-toggle="modal" data-bs-target="#failRequestModal" data-request-id="<%= req.id %>" data-request-code="<%= req.request_code %>">
+                        <i class="bi bi-x-circle"></i>
+                      </button>
+                      <button class="btn btn-sm btn-outline-secondary px-3 rounded-pill" onclick="navigator.clipboard.writeText('<%= req.mobile_number %>')" title="Copy Number">
+                        <i class="bi bi-clipboard"></i>
+                      </button>
+                    </div>
+
+                    <div class="collapse mt-3" id="complete-<%= req.id %>">
+                      <form action="/eload/requests/<%= req.id %>/complete" method="post" class="bg-light p-3 rounded-3 border">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <label class="form-label small fw-bold">Reference Number</label>
+                        <div class="input-group">
+                          <input class="form-control form-control-sm" name="referenceNumber" placeholder="Enter Ref #" required>
+                          <button class="btn btn-sm btn-success px-3">SAVE</button>
+                        </div>
+                        <div class="mini-note mt-2 text-center text-secondary">Verify transaction before saving.</div>
+                      </form>
+                    </div>
                   </div>
                 <% }) %>
-              </div>
-            <% } %>
+              <% } %>
+            </div>
           </div>
         </div>
+      </div>
 
       </div>
     </section>
@@ -464,353 +287,132 @@
     DITO: ["DITO 10", "DITO 50", "LEVEL-UP 99", "UNLI 5G 149"]
   };
 
-  const networkDescriptions = {
-    TM: "Data | Call | Combo",
-    GLOBE: "Data | Call | Combo",
-    SMART: "Data | Call | Combo",
-    TNT: "Data | Call | Combo",
-    SUN: "Data | Call | Combo",
-    DITO: "Data | Call | Combo"
-  };
-
   const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
-  const eloadServiceGrid = document.getElementById("eloadServiceGrid");
-  const eloadFlowCard = document.getElementById("eloadFlowCard");
-  const gcashFlowCard = document.getElementById("gcashFlowCard");
-  const eloadMobileNumber = document.getElementById("eloadMobileNumber");
+  const eloadForm = document.getElementById("eloadForm");
+  const gcashForm = document.getElementById("gcashForm");
+  const eloadMobileInput = document.getElementById("eloadMobileNumber");
+  const gcashMobileInput = document.getElementById("gcashMobileNumber");
   const eloadNetworkGrid = document.getElementById("eloadNetworkGrid");
-  const eloadSelectedNetworkText = document.getElementById("eloadSelectedNetworkText");
   const eloadPromoSelect = document.getElementById("eloadPromoSelect");
-  const eloadPromoHelp = document.getElementById("eloadPromoHelp");
-  const eloadPromoSection = document.getElementById("eloadPromoSection");
-  const eloadRegularSection = document.getElementById("eloadRegularSection");
-  const eloadGcashSection = document.getElementById("eloadGcashSection");
   const eloadRegularAmount = document.getElementById("eloadRegularAmount");
-  const eloadGcashSelect = document.getElementById("eloadGcashSelect");
-  const eloadNotes = document.getElementById("eloadNotes");
-  const eloadPreviewTitle = document.getElementById("eloadPreviewTitle");
-  const eloadPreviewSubtitle = document.getElementById("eloadPreviewSubtitle");
-  const eloadPreviewMode = document.getElementById("eloadPreviewMode");
-  const eloadPreviewNumber = document.getElementById("eloadPreviewNumber");
-  const eloadPreviewNetwork = document.getElementById("eloadPreviewNetwork");
-  const eloadPreviewValue = document.getElementById("eloadPreviewValue");
-  const eloadPreviewAmount = document.getElementById("eloadPreviewAmount");
   const eloadNetworkValue = document.getElementById("eloadNetworkValue");
   const eloadLoadValue = document.getElementById("eloadLoadValue");
   const eloadAmountValue = document.getElementById("eloadAmountValue");
-  const eloadActionAlert = document.getElementById("eloadActionAlert");
-  const eloadAddToCartButton = document.getElementById("eloadAddToCartButton");
-  const gcashMobileNumber = document.getElementById("gcashMobileNumber");
-  const gcashReferenceNumber = document.getElementById("gcashReferenceNumber");
-  const gcashCashFlow = document.getElementById("gcashCashFlow");
-  const gcashAmount = document.getElementById("gcashAmount");
-  const gcashPreviewTitle = document.getElementById("gcashPreviewTitle");
-  const gcashPreviewSubtitle = document.getElementById("gcashPreviewSubtitle");
-  const gcashPreviewNumber = document.getElementById("gcashPreviewNumber");
-  const gcashPreviewReference = document.getElementById("gcashPreviewReference");
-  const gcashPreviewFlow = document.getElementById("gcashPreviewFlow");
-  const gcashPreviewAmount = document.getElementById("gcashPreviewAmount");
-  const loadTypeInputs = Array.from(document.querySelectorAll("input[name='loadType']"));
-  const pendingRequestActionAlert = document.getElementById("pendingRequestActionAlert");
+  const loadTypeRadios = document.querySelectorAll("input[name='loadType']");
+  const promoGroup = document.getElementById("promoGroup");
+  const regularGroup = document.getElementById("regularGroup");
   const failRequestModal = document.getElementById("failRequestModal");
   const failRequestForm = document.getElementById("failRequestForm");
   const failRequestCodeText = document.getElementById("failRequestCodeText");
   const failedReasonInput = document.getElementById("failedReasonInput");
-  const initialRequestsFingerprint = <%- JSON.stringify(requestsFingerprint) %>;
 
   let selectedNetwork = "";
-  let selectedService = "eload";
-  let currentRequestsFingerprint = initialRequestsFingerprint;
-  let queueRefreshPending = false;
-  let queueRefreshInFlight = false;
   const salesCartStorageKey = "sales-cart-state";
   const salesCartOpenStorageKey = "sales-cart-open-on-load";
 
-  function onlyDigits(value) {
-    return String(value || "").replace(/\D/g, "").slice(0, 11);
+  function onlyDigits(v) { return String(v || "").replace(/\D/g, "").slice(0, 11); }
+
+  function formatMobile(v) {
+    const d = onlyDigits(v);
+    return [d.slice(0,4), d.slice(4,7), d.slice(7,11)].filter(Boolean).join(" ");
   }
 
-  function formatPhilippineMobile(value) {
-    const digits = onlyDigits(value);
-    const first = digits.slice(0, 4);
-    const second = digits.slice(4, 7);
-    const third = digits.slice(7, 11);
-    return [first, second, third].filter(Boolean).join(" ");
-  }
-
-  function getLoadType() {
-    return loadTypeInputs.find((input) => input.checked)?.value || "promo";
-  }
-
-  function parseLastAmount(value) {
-    const match = String(value || "").match(/(\d+(?:\.\d+)?)/g);
-    if (!match || !match.length) return 0;
-    return Number(match[match.length - 1]);
-  }
-
-  function showEloadActionAlert(type, message) {
-    eloadActionAlert.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show mt-3 mb-0" role="alert">${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
-  }
-
-  function showPendingRequestActionAlert(type, message) {
-    if (!pendingRequestActionAlert) return;
-    pendingRequestActionAlert.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show mb-0" role="alert">${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
-  }
-
-  function hasActiveFormEditing() {
-    const activeElement = document.activeElement;
-    if (!activeElement) return false;
-    return activeElement.matches("input, textarea, select");
-  }
-
-  function reloadQueuePage() {
-    window.location.reload();
-  }
-
-  async function checkQueueUpdates() {
-    if (queueRefreshInFlight || document.visibilityState !== "visible") return;
-    queueRefreshInFlight = true;
-
-    try {
-      const response = await fetch("/api/eload/requests", {
-        headers: { Accept: "application/json" },
-        cache: "no-store"
-      });
-      if (!response.ok) throw new Error("Failed to refresh queue.");
-      const payload = await response.json();
-      if (payload.fingerprint === currentRequestsFingerprint) return;
-
-      currentRequestsFingerprint = payload.fingerprint;
-      if (hasActiveFormEditing()) {
-        if (!queueRefreshPending) {
-          queueRefreshPending = true;
-          showPendingRequestActionAlert("info", "The request queue changed from another account. This page will refresh when you leave the current field.");
-        }
-        return;
-      }
-
-      reloadQueuePage();
-    } catch (error) {
-      console.error(error);
-    } finally {
-      queueRefreshInFlight = false;
-    }
-  }
-
-  function getEloadDraft() {
-    const digits = onlyDigits(eloadMobileNumber.value);
-    const loadType = getLoadType();
-    const selectedValue = loadType === "promo"
-      ? (eloadPromoSelect.value || "")
-      : loadType === "regular"
-        ? (eloadRegularAmount.value ? `Regular ${eloadRegularAmount.value}` : "")
-        : (eloadGcashSelect.value || "");
-    const amount = loadType === "regular" ? Number(eloadRegularAmount.value || 0) : parseLastAmount(selectedValue);
-
-    if (digits.length !== 11 || !digits.startsWith("09")) {
-      throw new Error("Enter a valid 11-digit mobile number before adding to cart.");
-    }
-    if (!selectedNetwork) {
-      throw new Error("Choose a network before adding to cart.");
-    }
-    if (!selectedValue) {
-      throw new Error("Choose a load option before adding to cart.");
-    }
-    if (amount <= 0) {
-      throw new Error("Enter a valid amount before adding to cart.");
-    }
-
-    return {
-      id: `eload-${Date.now()}`,
-      type: "eload",
-      name: `${selectedNetwork} ${selectedValue}`,
-      mobileNumber: formatPhilippineMobile(digits),
-      network: selectedNetwork,
-      loadType,
-      loadValue: selectedValue,
-      notes: eloadNotes.value.trim(),
-      quantity: 1,
-      price: amount
-    };
-  }
-
-  function addEloadDraftToCart() {
-    try {
-      const draft = getEloadDraft();
-      const raw = window.localStorage.getItem(salesCartStorageKey);
-      const parsed = raw ? JSON.parse(raw) : [];
-      const cart = Array.isArray(parsed) ? parsed : [];
-      cart.push(draft);
-      window.localStorage.setItem(salesCartStorageKey, JSON.stringify(cart));
-      window.localStorage.setItem(salesCartOpenStorageKey, "true");
-      window.location.href = "/sales?cart=open";
-    } catch (error) {
-      showEloadActionAlert("danger", error.message);
-    }
+  function parseAmount(v) {
+    const m = String(v || "").match(/(\d+)/g);
+    return m ? Number(m[m.length-1]) : 0;
   }
 
   function renderNetworks() {
-    eloadNetworkGrid.innerHTML = Object.keys(networkPromos).map((network) => `
-      <button type="button" class="eload-network-card ${selectedNetwork === network ? "is-selected" : ""}" data-network="${network}">
-        <span class="fw-semibold">${network}</span>
-        <span class="mini-note">${networkDescriptions[network]}</span>
-      </button>
+    eloadNetworkGrid.innerHTML = Object.keys(networkPromos).map(net => `
+      <div class="col-4 col-md-2">
+        <button type="button" class="btn w-100 py-2 border rounded-3 network-btn ${selectedNetwork === net ? 'btn-primary border-primary' : 'btn-white'}" data-network="${net}">
+          <div class="fw-bold small">${net}</div>
+        </button>
+      </div>
     `).join("");
   }
 
-  function renderPromoOptions() {
-    if (!selectedNetwork) {
-      eloadPromoSelect.innerHTML = '<option value="">Choose a network first</option>';
-      eloadPromoSelect.disabled = true;
-      eloadPromoHelp.textContent = "Choose a network first to see available promos.";
-      return;
+  function updateEloadValues() {
+    const type = document.querySelector("input[name='loadType']:checked").value;
+    let val = "";
+    let amt = 0;
+
+    if (type === "promo") {
+      val = eloadPromoSelect.value;
+      amt = parseAmount(val);
+    } else {
+      amt = Number(eloadRegularAmount.value || 0);
+      val = amt ? `Regular ${amt}` : "";
     }
 
-    const promos = networkPromos[selectedNetwork] || [];
-    eloadPromoSelect.innerHTML = promos.map((promo) => `<option value="${promo}">${promo}</option>`).join("");
-    eloadPromoSelect.disabled = false;
-    eloadPromoHelp.textContent = `${selectedNetwork} promos are ready to choose.`;
-  }
-
-  function updateServiceCards() {
-    eloadServiceGrid.querySelectorAll("[data-service]").forEach((button) => {
-      button.classList.toggle("is-selected", button.dataset.service === selectedService);
-    });
-    eloadFlowCard.classList.toggle("d-none", selectedService !== "eload");
-    gcashFlowCard.classList.toggle("d-none", selectedService !== "gcash");
-  }
-
-  function updateLoadSections() {
-    const loadType = getLoadType();
-    const isPromo = loadType === "promo";
-    const isRegular = loadType === "regular";
-    const isGcash = loadType === "gcash";
-    eloadPromoSection.classList.toggle("d-none", !isPromo);
-    eloadRegularSection.classList.toggle("d-none", !isRegular);
-    eloadGcashSection.classList.toggle("d-none", !isGcash);
-    eloadPreviewMode.textContent = isPromo ? "Promo" : isRegular ? "Regular" : "GCash Exclusive";
-    eloadPreviewMode.className = `badge rounded-pill px-3 py-2 ${isPromo ? "text-bg-success" : isRegular ? "text-bg-primary" : "text-bg-warning"}`;
-  }
-
-  function updatePreview() {
-    const formattedNumber = formatPhilippineMobile(eloadMobileNumber.value);
-    const loadType = getLoadType();
-    const selectedValue = loadType === "promo"
-      ? (eloadPromoSelect.value || "Choose an option")
-      : loadType === "regular"
-        ? (eloadRegularAmount.value ? `Regular ${eloadRegularAmount.value}` : "Enter amount")
-        : (eloadGcashSelect.value || "Choose a GCash exclusive option");
-    const amount = loadType === "regular" ? Number(eloadRegularAmount.value || 0) : parseLastAmount(selectedValue);
-
-    eloadPreviewNumber.textContent = formattedNumber || "09XX XXX XXXX";
-    eloadPreviewNetwork.textContent = selectedNetwork || "Select network";
-    eloadPreviewValue.textContent = selectedValue;
-    eloadPreviewAmount.textContent = peso.format(amount || 0);
-    eloadPreviewTitle.textContent = selectedNetwork ? `${selectedNetwork} request ready` : "Ready to create eload request";
-    eloadPreviewSubtitle.textContent = selectedNetwork
-      ? `${loadType === "promo" ? "Promo load" : loadType === "regular" ? "Regular load" : "GCash exclusive load"} request is ready for queueing.`
-      : "Complete the fields to preview the selected load request.";
-    eloadSelectedNetworkText.textContent = selectedNetwork ? `Selected: ${selectedNetwork}` : "No network selected yet";
     eloadNetworkValue.value = selectedNetwork;
-    eloadLoadValue.value = selectedValue.includes("Enter amount") ? "" : selectedValue;
-    eloadAmountValue.value = String(amount || "");
+    eloadLoadValue.value = val;
+    eloadAmountValue.value = amt;
   }
 
-  function updateGcashPreview() {
-    const formattedNumber = formatPhilippineMobile(gcashMobileNumber.value);
-    const reference = gcashReferenceNumber.value.trim();
-    const amount = Number(gcashAmount.value || 0);
-    gcashPreviewNumber.textContent = formattedNumber || "09XX XXX XXXX";
-    gcashPreviewReference.textContent = reference || "Pending";
-    gcashPreviewFlow.textContent = gcashCashFlow.value;
-    gcashPreviewAmount.textContent = peso.format(amount || 0);
-    gcashPreviewTitle.textContent = formattedNumber ? "GCash request ready" : "Ready to create GCash request";
-    gcashPreviewSubtitle.textContent = formattedNumber || reference || amount
-      ? `${gcashCashFlow.value} request is ready for queueing.`
-      : "Complete the fields to preview the request details.";
-  }
+  // Event Listeners
+  eloadMobileInput.addEventListener("input", (e) => e.target.value = formatMobile(e.target.value));
+  gcashMobileInput.addEventListener("input", (e) => e.target.value = formatMobile(e.target.value));
 
-  eloadServiceGrid.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-service]");
-    if (!button) return;
-    selectedService = button.dataset.service;
-    updateServiceCards();
-  });
-
-  eloadMobileNumber.addEventListener("input", () => {
-    eloadMobileNumber.value = formatPhilippineMobile(eloadMobileNumber.value);
-    updatePreview();
-  });
-
-  gcashMobileNumber.addEventListener("input", () => {
-    gcashMobileNumber.value = formatPhilippineMobile(gcashMobileNumber.value);
-    updateGcashPreview();
-  });
-
-  gcashReferenceNumber.addEventListener("input", updateGcashPreview);
-  gcashCashFlow.addEventListener("change", updateGcashPreview);
-  gcashAmount.addEventListener("input", updateGcashPreview);
-
-  eloadNetworkGrid.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-network]");
-    if (!button) return;
-    selectedNetwork = button.dataset.network;
+  eloadNetworkGrid.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-network]");
+    if (!btn) return;
+    selectedNetwork = btn.dataset.network;
     renderNetworks();
-    renderPromoOptions();
-    updatePreview();
+    
+    eloadPromoSelect.disabled = false;
+    eloadPromoSelect.innerHTML = `<option value="">Select Promo</option>` + networkPromos[selectedNetwork].map(p => `<option value="${p}">${p}</option>`).join("");
+    updateEloadValues();
   });
 
-  loadTypeInputs.forEach((input) => {
-    input.addEventListener("change", () => {
-      updateLoadSections();
-      updatePreview();
-    });
-  });
+  loadTypeRadios.forEach(r => r.addEventListener("change", (e) => {
+    promoGroup.classList.toggle("d-none", e.target.value !== "promo");
+    regularGroup.classList.toggle("d-none", e.target.value !== "regular");
+    updateEloadValues();
+  }));
 
-  eloadPromoSelect.addEventListener("change", updatePreview);
-  eloadRegularAmount.addEventListener("input", updatePreview);
-  eloadGcashSelect.addEventListener("change", updatePreview);
-  eloadAddToCartButton.addEventListener("click", addEloadDraftToCart);
-  document.querySelectorAll(".pending-request-copy").forEach((button) => {
-    button.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(button.dataset.copyNumber || "");
-        showPendingRequestActionAlert("success", "Mobile number copied.");
-      } catch (error) {
-        showPendingRequestActionAlert("danger", "Failed to copy mobile number.");
-      }
-    });
+  eloadPromoSelect.addEventListener("change", updateEloadValues);
+  eloadRegularAmount.addEventListener("input", updateEloadValues);
+
+  document.getElementById("eloadAddToCartButton").addEventListener("click", () => {
+    try {
+      const num = onlyDigits(eloadMobileInput.value);
+      if (num.length !== 11) throw new Error("Invalid mobile number.");
+      if (!selectedNetwork) throw new Error("Select a network.");
+      if (!eloadLoadValue.value) throw new Error("Select a load option.");
+
+      const item = {
+        id: `eload-${Date.now()}`,
+        type: "eload",
+        name: `${selectedNetwork} ${eloadLoadValue.value}`,
+        mobileNumber: formatMobile(num),
+        network: selectedNetwork,
+        loadType: document.querySelector("input[name='loadType']:checked").value,
+        loadValue: eloadLoadValue.value,
+        price: Number(eloadAmountValue.value),
+        quantity: 1
+      };
+
+      const cart = JSON.parse(localStorage.getItem(salesCartStorageKey) || "[]");
+      cart.push(item);
+      localStorage.setItem(salesCartStorageKey, JSON.stringify(cart));
+      localStorage.setItem(salesCartOpenStorageKey, "true");
+      window.location.href = "/sales";
+    } catch (err) {
+      alert(err.message);
+    }
   });
 
   if (failRequestModal) {
-    failRequestModal.addEventListener("show.bs.modal", (event) => {
-      const trigger = event.relatedTarget;
-      const requestId = trigger?.dataset.requestId || "";
-      const requestCode = trigger?.dataset.requestCode || "Request";
-      failRequestForm.action = `/eload/requests/${requestId}/fail`;
-      failRequestCodeText.textContent = requestCode;
+    failRequestModal.addEventListener("show.bs.modal", (e) => {
+      const btn = e.relatedTarget;
+      failRequestForm.action = `/eload/requests/${btn.dataset.requestId}/fail`;
+      failRequestCodeText.textContent = btn.dataset.requestCode;
       failedReasonInput.value = "";
     });
   }
 
-  document.addEventListener("focusout", () => {
-    if (!queueRefreshPending) return;
-    window.setTimeout(() => {
-      if (hasActiveFormEditing()) return;
-      reloadQueuePage();
-    }, 0);
-  });
-
-  updateServiceCards();
+  // Init
   renderNetworks();
-  renderPromoOptions();
-  updateLoadSections();
-  updatePreview();
-  updateGcashPreview();
-  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
-    bootstrap.Tooltip.getOrCreateInstance(element);
-  });
-  window.setInterval(checkQueueUpdates, 3000);
-</script>
-</body>
+</script></body>
 </html>

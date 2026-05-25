@@ -6,46 +6,49 @@
     <section class="p-3 p-lg-4 sales-workspace">
       <%- include("partials/flash") %>
       <div id="salesLiveAlert"></div>
-      <div class="content-card p-4 sales-entry-card">
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-          <div class="d-flex flex-wrap align-items-center gap-2">
-            <div class="section-title">Quick Sale Entry</div>
-            <button
-              class="btn btn-sm btn-outline-secondary rounded-circle d-inline-flex align-items-center justify-content-center"
-              type="button"
-              style="width: 1.9rem; height: 1.9rem;"
-              data-bs-toggle="tooltip"
-              data-bs-placement="right"
-              data-bs-title="Examples: Coke, Sardines, Soap. Search resets after each add."
-              aria-label="Item search guide"
-            >
-              ?
-            </button>
+      
+      <div class="d-flex flex-column h-100">
+        <!-- Search & Filter Bar -->
+        <div class="content-card p-3 mb-4">
+          <!-- Search Row -->
+          <div class="mb-3">
+            <div class="input-group search-glass">
+              <span class="input-group-text border-0 bg-transparent ps-3"><i class="bi bi-search text-muted"></i></span>
+              <input class="form-control border-0 bg-transparent py-2" id="quickItemSearch" placeholder="Search product or category..." autocomplete="off">
+            </div>
+          </div>
+          
+          <!-- Category Row (Scrollable) -->
+          <div class="d-flex gap-2 category-pill-container flex-nowrap overflow-auto no-scrollbar py-1">
+            <button class="btn btn-sm btn-category active flex-shrink-0" data-category="all">All Items</button>
+            <% categories.forEach(cat => { %>
+              <button class="btn btn-sm btn-category flex-shrink-0" data-category="<%= cat.category_name %>"><%= cat.category_name %></button>
+            <% }) %>
           </div>
         </div>
 
-        <form method="post" action="/sales/add" id="saleForm">
-          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-          <input type="hidden" name="saleDate" value="<%= saleDateDefault %>">
-          <input type="hidden" name="paymentMethod" value="Cash">
-          <div class="row g-4 align-items-start">
-            <div class="col-12">
-              <div class="vstack gap-4">
-                <div class="pos-search-wrap">
-                  <div class="input-group input-group-lg">
-                    <span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
-                    <input class="form-control" id="quickItemSearch" placeholder="Type item name, category, or code">
-                  </div>
-                  <div class="pos-suggestions list-group mt-2 d-none" id="quickSuggestions"></div>
-                </div>
-              </div>
-            </div>
-
+        <!-- Product Grid -->
+        <div class="flex-grow-1 overflow-auto pe-2 product-grid-container">
+          <div class="row g-3 g-lg-4" id="quickSuggestions">
+            <!-- Items rendered via JS -->
           </div>
-
-          <div id="saleHiddenInputs"></div>
-        </form>
+          
+          <div id="emptySearchState" class="d-none text-center py-5">
+            <div class="mb-3">
+              <i class="bi bi-box-seam display-1 text-muted opacity-25"></i>
+            </div>
+            <h3 class="h5 fw-bold">No products found</h3>
+            <p class="text-secondary">Try a different search term or category.</p>
+          </div>
+        </div>
       </div>
+
+      <form method="post" action="/sales/add" id="saleForm" class="d-none">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="saleDate" value="<%= saleDateDefault %>">
+        <input type="hidden" name="paymentMethod" value="Cash">
+        <div id="saleHiddenInputs"></div>
+      </form>
     </section>
   </main>
 </div>
@@ -118,6 +121,8 @@
   const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
   const searchInput = document.getElementById("quickItemSearch");
   const suggestions = document.getElementById("quickSuggestions");
+  const emptySearchState = document.getElementById("emptySearchState");
+  const categoryButtons = document.querySelectorAll(".btn-category");
   const cartBody = document.getElementById("saleCartBody");
   const hiddenInputs = document.getElementById("saleHiddenInputs");
   const grandTotal = document.getElementById("saleGrandTotal");
@@ -134,8 +139,7 @@
   const cartStorageKey = "sales-cart-state";
   const cartOpenStorageKey = "sales-cart-open-on-load";
 
-  let filteredItems = [];
-  let highlightedIndex = 0;
+  let activeCategory = "all";
   let cart = loadStoredCart();
   let isCartOpen = false;
 
@@ -144,42 +148,21 @@
       const raw = window.localStorage.getItem(cartStorageKey);
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return [];
-
-        return parsed
-          .map((entry) => {
-          if (entry?.type === "eload") {
-            const quantity = Math.max(1, Number(entry.quantity) || 1);
-            const price = Number(entry.price || 0);
-            if (!entry.mobileNumber || !entry.network || !entry.loadValue || price <= 0) return null;
-            return {
-              id: String(entry.id || `eload-${Date.now()}`),
-              type: "eload",
-              name: String(entry.name || entry.loadValue),
-              price,
-              quantity,
-              mobileNumber: String(entry.mobileNumber || ""),
-              network: String(entry.network || ""),
-              loadType: String(entry.loadType || ""),
-              loadValue: String(entry.loadValue || ""),
-              notes: String(entry.notes || "")
-            };
-          }
-
-          const item = inventoryItems.find((candidate) => candidate.id === Number(entry.id));
-          if (!item || item.status === "Out of Stock") return null;
-          const quantity = Math.max(1, Number(entry.quantity) || 1);
-          return {
-            id: item.id,
-            type: "inventory",
-            name: item.name,
-            price: item.selling_price,
-            quantity
-          };
-        })
-        .filter(Boolean);
-    } catch (error) {
-      return [];
-    }
+      return parsed.map(entry => {
+        if (entry?.type === "eload") {
+          return entry;
+        }
+        const item = inventoryItems.find(i => i.id === Number(entry.id));
+        if (!item || item.status === "Out of Stock") return null;
+        return {
+          id: item.id,
+          type: "inventory",
+          name: item.name,
+          price: item.selling_price,
+          quantity: Math.max(1, Number(entry.quantity) || 1)
+        };
+      }).filter(Boolean);
+    } catch (e) { return []; }
   }
 
   function persistCart() {
@@ -192,109 +175,86 @@
     cartFlyout.classList.toggle("is-open", isCartOpen);
     cartFlyout.setAttribute("aria-hidden", String(!isCartOpen));
     cartBackdrop.hidden = !isCartOpen;
-    cartToggleButton.setAttribute("aria-expanded", String(isCartOpen));
+    if (cartToggleButton) cartToggleButton.setAttribute("aria-expanded", String(isCartOpen));
   }
 
-  function toggleCart() {
-    setCartOpen(!isCartOpen);
-  }
+  function toggleCart() { setCartOpen(!isCartOpen); }
 
   function escapeHtml(value) {
-    return String(value ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
+    return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
   function focusSearch(preventScroll = true) {
     searchInput.focus({ preventScroll });
   }
 
-  function normalizeQuery(value) {
-    return String(value || "").trim().toLowerCase();
-  }
-
-  function normalizeQuantity(value) {
-    return Math.max(1, Number(value) || 1);
-  }
-
   function searchItems(query) {
-    const normalized = normalizeQuery(query);
-    if (!normalized) return inventoryItems;
-    return inventoryItems
-      .filter((item) => `${item.name} ${item.category}`.toLowerCase().includes(normalized))
-      .slice(0, 80);
-  }
-
-  function renderSuggestions(items) {
-    filteredItems = items;
-    highlightedIndex = 0;
-
-    if (!items.length) {
-      suggestions.innerHTML = "";
-      suggestions.classList.add("d-none");
-      return;
-    }
-
-      suggestions.innerHTML = items.map((item, index) => `
-        <div class="list-group-item pos-suggestion ${index === 0 ? "active" : ""}" data-item-id="${item.id}">
-          <div class="d-flex justify-content-between align-items-center gap-3">
-            <div class="min-w-0">
-              <div class="d-flex justify-content-between gap-3">
-                <span class="fw-semibold">${escapeHtml(item.name)}</span>
-                <span>${peso.format(item.selling_price)}</span>
-              </div>
-              <div class="mini-note">${escapeHtml(item.category)}</div>
-            </div>
-            <button class="btn btn-sm btn-success pos-suggestion-add" type="button" data-item-id="${item.id}">Add</button>
-          </div>
-        </div>
-      `).join("");
-    suggestions.classList.remove("d-none");
-  }
-
-  function hideSuggestions() {
-    filteredItems = [];
-    highlightedIndex = 0;
-    suggestions.innerHTML = "";
-    suggestions.classList.add("d-none");
-  }
-
-  function setSuggestionHighlight(index) {
-    const buttons = [...suggestions.querySelectorAll(".pos-suggestion")];
-    if (!buttons.length) return;
-    highlightedIndex = (index + buttons.length) % buttons.length;
-    buttons.forEach((button, currentIndex) => {
-      button.classList.toggle("active", currentIndex === highlightedIndex);
+    const normalized = query.trim().toLowerCase();
+    return inventoryItems.filter(item => {
+      const matchesSearch = !normalized || `${item.name} ${item.category}`.toLowerCase().includes(normalized);
+      const matchesCategory = activeCategory === "all" || item.category === activeCategory;
+      return matchesSearch && matchesCategory;
     });
   }
 
+  function renderSuggestions() {
+    const items = searchItems(searchInput.value);
+    
+    if (!items.length) {
+      suggestions.innerHTML = "";
+      emptySearchState.classList.remove("d-none");
+      return;
+    }
+
+    emptySearchState.classList.add("d-none");
+    suggestions.innerHTML = items.map(item => {
+      const statusClass = item.status === "Low Stock" ? "text-warning" : "text-success";
+      return `
+        <div class="col-6 col-sm-4 col-md-3 col-xl-2">
+          <div class="product-card h-100" onclick="addItemToCart(${item.id}, 1)">
+            <div class="product-card-body">
+              <div class="category-tag mb-2">${escapeHtml(item.category)}</div>
+              <div class="product-name fw-bold mb-1">${escapeHtml(item.name)}</div>
+              <div class="product-price text-success fw-bold">${peso.format(item.selling_price)}</div>
+            </div>
+            <div class="product-card-footer mt-auto pt-2">
+               <div class="d-flex justify-content-between align-items-center">
+                 <span class="mini-note fw-bold ${statusClass}">${escapeHtml(item.status)}</span>
+                 <i class="bi bi-plus-circle-fill text-success fs-5"></i>
+               </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
   function addItemToCart(itemId, quantity) {
-    const item = inventoryItems.find((entry) => entry.id === Number(itemId));
-    const qty = normalizeQuantity(quantity);
+    const item = inventoryItems.find(i => i.id === Number(itemId));
     if (!item) return;
 
-    const existing = cart.find((entry) => entry.id === item.id);
-    const nextQuantity = (existing ? existing.quantity : 0) + qty;
-
-      if (existing) {
-        existing.quantity = nextQuantity;
-      } else {
-        cart.push({
-          id: item.id,
-          type: "inventory",
-          name: item.name,
-          price: item.selling_price,
-          quantity: qty
+    const existing = cart.find(entry => entry.id === item.id && entry.type === "inventory");
+    if (existing) {
+      existing.quantity += quantity;
+    } else {
+      cart.push({
+        id: item.id,
+        type: "inventory",
+        name: item.name,
+        price: item.selling_price,
+        quantity: quantity
       });
     }
 
     renderCart();
-    searchInput.value = "";
-    renderSuggestions(searchItems(""));
-    focusSearch(true);
+    showSalesAlert("success", `Added ${item.name} to cart.`);
+    
+    // Pulse animation for cart fab
+    const fab = document.getElementById("globalCartToggleButton");
+    if (fab) {
+      fab.classList.add("pulse-animation");
+      setTimeout(() => fab.classList.remove("pulse-animation"), 1000);
+    }
   }
 
   function renderCart() {
@@ -304,7 +264,7 @@
       grandTotal.textContent = peso.format(0);
       cartItemCount.textContent = "0";
       cartUnitCount.textContent = "0";
-      cartFabCount.textContent = "0";
+      if (cartFabCount) cartFabCount.textContent = "0";
       persistCart();
       return;
     }
@@ -312,116 +272,125 @@
     let totalAmount = 0;
     let totalUnits = 0;
 
-      cartBody.innerHTML = cart.map((item, index) => {
-        const lineTotal = item.quantity * item.price;
-        totalAmount += lineTotal;
-        totalUnits += item.quantity;
-        return `
-          <tr>
-            <td>
-              <div class="fw-semibold">${escapeHtml(item.name)}</div>
-              <div class="mini-note">${item.type === "eload" ? `${escapeHtml(item.network)} | ${escapeHtml(item.mobileNumber)}` : "Product item"}</div>
-            </td>
-            <td class="text-end">${peso.format(item.price)}</td>
-            <td>
-              ${item.type === "eload"
-                ? `<div class="form-control form-control-sm bg-light">1 request</div>
-                   <div class="mini-note mt-1">${escapeHtml(item.loadValue)}</div>`
-                : `<input class="form-control form-control-sm cart-qty-input" type="number" min="1" value="${item.quantity}" data-index="${index}" inputmode="numeric">
-                   <div class="d-flex gap-1 mt-1">
-                     <button class="btn btn-sm btn-outline-secondary cart-qty-step" type="button" data-index="${index}" data-step="-1">-</button>
-                     <button class="btn btn-sm btn-outline-secondary cart-qty-step" type="button" data-index="${index}" data-step="1">+</button>
-                   </div>`}
-            </td>
-            <td class="text-end fw-semibold">${peso.format(lineTotal)}</td>
-            <td class="text-end">
-              <button class="btn btn-sm btn-outline-danger remove-cart-item" type="button" data-index="${index}"><i class="bi bi-x-lg"></i></button>
+    cartBody.innerHTML = cart.map((item, index) => {
+      const lineTotal = item.quantity * item.price;
+      totalAmount += lineTotal;
+      totalUnits += item.quantity;
+      return `
+        <tr>
+          <td>
+            <div class="fw-semibold">${escapeHtml(item.name)}</div>
+            <div class="mini-note">${item.type === "eload" ? `${escapeHtml(item.network)} | ${escapeHtml(item.mobileNumber)}` : "Product"}</div>
+          </td>
+          <td class="text-end">${peso.format(item.price)}</td>
+          <td>
+            ${item.type === "eload"
+              ? `<div class="form-control form-control-sm bg-light">1 req</div>`
+              : `<div class="input-group input-group-sm" style="width: 100px;">
+                   <button class="btn btn-outline-secondary cart-qty-step" type="button" data-index="${index}" data-step="-1">-</button>
+                   <input class="form-control text-center cart-qty-input" type="number" min="1" value="${item.quantity}" data-index="${index}">
+                   <button class="btn btn-outline-secondary cart-qty-step" type="button" data-index="${index}" data-step="1">+</button>
+                 </div>`}
+          </td>
+          <td class="text-end fw-semibold">${peso.format(lineTotal)}</td>
+          <td class="text-end">
+            <button class="btn btn-sm text-danger remove-cart-item" type="button" data-index="${index}"><i class="bi bi-trash"></i></button>
           </td>
         </tr>
       `;
     }).join("");
 
-      hiddenInputs.innerHTML = cart.map((item) => `
-        <input type="hidden" name="itemId" value="${item.type === "inventory" ? item.id : ""}">
-        <input type="hidden" name="quantity" value="${item.quantity}">
-        <input type="hidden" name="price" value="${item.price}">
-      `).join("");
+    hiddenInputs.innerHTML = cart.map(item => `
+      <input type="hidden" name="itemId" value="${item.type === "inventory" ? item.id : ""}">
+      <input type="hidden" name="quantity" value="${item.quantity}">
+      <input type="hidden" name="price" value="${item.price}">
+    `).join("");
 
     grandTotal.textContent = peso.format(totalAmount);
     cartItemCount.textContent = String(cart.length);
     cartUnitCount.textContent = String(totalUnits);
-    cartFabCount.textContent = String(totalUnits);
+    if (cartFabCount) cartFabCount.textContent = String(totalUnits);
     persistCart();
-  }
-
-  function addHighlightedSuggestion() {
-    if (!filteredItems.length) return;
-    addItemToCart(filteredItems[highlightedIndex].id, 1);
   }
 
   function resetForNewCustomer() {
     cart = [];
     renderCart();
     searchInput.value = "";
-    renderSuggestions(searchItems(""));
+    renderSuggestions();
     focusSearch(true);
   }
 
   function showSalesAlert(type, message) {
     salesLiveAlert.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show app-flash-popup" role="alert">${escapeHtml(message)}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
-    const alertElement = salesLiveAlert.querySelector(".alert");
-    window.setTimeout(() => {
-      if (!alertElement) return;
-      if (typeof bootstrap !== "undefined" && bootstrap.Alert) {
-        bootstrap.Alert.getOrCreateInstance(alertElement).close();
-        return;
-      }
-      alertElement.classList.remove("show");
-      window.setTimeout(() => alertElement.remove(), 180);
-    }, 5000);
+    setTimeout(() => {
+      const alert = salesLiveAlert.querySelector(".alert");
+      if (alert) bootstrap.Alert.getOrCreateInstance(alert).close();
+    }, 3000);
   }
 
-  function updateSalesMetrics(metrics) {
-    return metrics;
-  }
+  // Event Listeners
+  searchInput.addEventListener("input", renderSuggestions);
 
-  async function refreshSalesMetrics() {
-    const response = await fetch("/api/sales/metrics", { headers: { Accept: "application/json" } });
-    if (!response.ok) throw new Error("Failed to load sales metrics.");
-    updateSalesMetrics(await response.json());
-  }
-
-  searchInput.addEventListener("input", () => {
-    renderSuggestions(searchItems(searchInput.value));
+  categoryButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      categoryButtons.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      activeCategory = btn.dataset.category;
+      renderSuggestions();
+    });
   });
 
-  searchInput.addEventListener("keydown", (event) => {
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setSuggestionHighlight(highlightedIndex + 1);
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setSuggestionHighlight(highlightedIndex - 1);
-    } else if (event.key === "Enter") {
-      event.preventDefault();
-      addHighlightedSuggestion();
+  cartBody.addEventListener("click", (e) => {
+    const stepBtn = e.target.closest(".cart-qty-step");
+    if (stepBtn) {
+      const idx = Number(stepBtn.dataset.index);
+      const step = Number(stepBtn.dataset.step);
+      cart[idx].quantity = Math.max(1, cart[idx].quantity + step);
+      renderCart();
+      return;
+    }
+    const removeBtn = e.target.closest(".remove-cart-item");
+    if (removeBtn) {
+      cart.splice(Number(removeBtn.dataset.index), 1);
+      renderCart();
     }
   });
 
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "F2") {
-      event.preventDefault();
-      focusSearch(false);
-      searchInput.select();
-    } else if (event.key === "Escape" && isCartOpen) {
+  cartBody.addEventListener("change", (e) => {
+    if (e.target.classList.contains("cart-qty-input")) {
+      const idx = Number(e.target.dataset.index);
+      cart[idx].quantity = Math.max(1, Number(e.target.value) || 1);
+      renderCart();
+    }
+  });
+
+  saleForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!cart.length) return;
+
+    const payload = {
+      _csrf: document.querySelector('input[name="_csrf"]').value,
+      saleDate: document.querySelector('input[name="saleDate"]').value,
+      paymentMethod: "Cash",
+      items: cart.filter(i => i.type === "inventory").map(i => ({ inventoryItemId: i.id, quantity: i.quantity, price: i.price })),
+      digitalItems: cart.filter(i => i.type === "eload").map(i => ({ ...i }))
+    };
+
+    try {
+      const resp = await fetch("/api/sales", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "Failed to complete sale.");
+      showSalesAlert("success", "Sale completed successfully!");
+      resetForNewCustomer();
       setCartOpen(false);
+    } catch (err) {
+      showSalesAlert("danger", err.message);
     }
-  });
-
-  suggestions.addEventListener("click", (event) => {
-    const button = event.target.closest(".pos-suggestion-add");
-    if (!button) return;
-    addItemToCart(button.dataset.itemId, 1);
   });
 
   newCustomerButton.addEventListener("click", resetForNewCustomer);
@@ -429,97 +398,10 @@
   cartBackdrop.addEventListener("click", () => setCartOpen(false));
   window.addEventListener("sales-cart-toggle-request", toggleCart);
 
-  cartBody.addEventListener("focusin", (event) => {
-    const input = event.target.closest(".cart-qty-input");
-    if (input) input.select();
-  });
-
-  cartBody.addEventListener("input", (event) => {
-    const input = event.target.closest(".cart-qty-input");
-    if (!input) return;
-    const index = Number(input.dataset.index);
-    if (cart[index]?.type === "eload") return;
-    if (input.value === "") return;
-    cart[index].quantity = Math.max(1, Number(input.value) || 1);
-    renderCart();
-  });
-
-  cartBody.addEventListener("click", (event) => {
-    const removeButton = event.target.closest(".remove-cart-item");
-    if (removeButton) {
-      cart.splice(Number(removeButton.dataset.index), 1);
-      renderCart();
-      return;
-    }
-
-    const stepButton = event.target.closest(".cart-qty-step");
-    if (!stepButton) return;
-    const index = Number(stepButton.dataset.index);
-    if (cart[index]?.type === "eload") return;
-    const step = Number(stepButton.dataset.step);
-    cart[index].quantity = Math.max(1, cart[index].quantity + step);
-    renderCart();
-  });
-
-  saleForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    if (!cart.length) {
-      focusSearch(false);
-      return;
-    }
-
-    const formData = new FormData(saleForm);
-    const payload = {
-      _csrf: formData.get("_csrf"),
-      saleDate: formData.get("saleDate"),
-      paymentMethod: formData.get("paymentMethod"),
-      items: cart.filter((item) => item.type !== "eload").map((item) => ({
-        inventoryItemId: item.id,
-        quantity: item.quantity,
-        price: item.price
-      })),
-      digitalItems: cart.filter((item) => item.type === "eload").map((item) => ({
-        mobileNumber: item.mobileNumber,
-        network: item.network,
-        loadType: item.loadType,
-        loadValue: item.loadValue,
-        notes: item.notes,
-        quantity: item.quantity,
-        price: item.price
-      }))
-    };
-
-    fetch("/api/sales", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json"
-      },
-      body: JSON.stringify(payload)
-    })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Failed to save sale.");
-        showSalesAlert("success", data.message || "Sale recorded successfully.");
-        resetForNewCustomer();
-        if (data.metrics) updateSalesMetrics(data.metrics);
-      })
-      .catch((error) => {
-        showSalesAlert("danger", error.message);
-      });
-  });
-
-  renderSuggestions(searchItems(""));
+  // Initial render
+  renderSuggestions();
   renderCart();
   focusSearch(true);
-  if (new URLSearchParams(window.location.search).get("cart") === "open" || window.localStorage.getItem(cartOpenStorageKey) === "true") {
-    setCartOpen(true);
-    window.localStorage.removeItem(cartOpenStorageKey);
-  }
-  refreshSalesMetrics().catch(console.error);
-  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
-    bootstrap.Tooltip.getOrCreateInstance(element);
-  });
 </script>
 </body>
 </html>

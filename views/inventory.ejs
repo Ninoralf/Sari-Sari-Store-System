@@ -5,100 +5,116 @@
     <%- include("partials/topbar") %>
     <section class="p-3 p-lg-4">
       <%- include("partials/flash") %>
-      <div class="row g-4 mb-4 inventory-summary-grid">
-        <div class="col-md-6 col-xl-3"><a class="metric-card metric-card-link dashboard-metric-card p-4 h-100 d-block text-reset text-decoration-none" href="/inventory"><div class="dashboard-metric-body d-flex justify-content-between"><div class="dashboard-metric-copy"><div class="mini-note dashboard-metric-label">Total Items</div><div class="dashboard-metric-value display-6 fw-bold" id="inventorySummaryTotal"><%= summary.total %></div><div class="mini-note dashboard-metric-note">Inventory records</div></div><div class="stat-icon blue"><i class="bi bi-box-seam fs-4"></i></div></div></a></div>
-        <div class="col-md-6 col-xl-3"><a class="metric-card metric-card-link dashboard-metric-card p-4 h-100 d-block text-reset text-decoration-none" href="/inventory?status=In%20Stock"><div class="dashboard-metric-body d-flex justify-content-between"><div class="dashboard-metric-copy"><div class="mini-note dashboard-metric-label">In Stock</div><div class="dashboard-metric-value display-6 fw-bold text-success" id="inventorySummaryInStock"><%= summary.inStock %></div><div class="mini-note dashboard-metric-note">Ready to sell</div></div><div class="stat-icon green"><i class="bi bi-check-circle fs-4"></i></div></div></a></div>
-        <div class="col-md-6 col-xl-3"><a class="metric-card metric-card-link dashboard-metric-card p-4 h-100 d-block text-reset text-decoration-none" href="/inventory?status=Low%20Stock"><div class="dashboard-metric-body d-flex justify-content-between"><div class="dashboard-metric-copy"><div class="mini-note dashboard-metric-label">Low Stock</div><div class="dashboard-metric-value display-6 fw-bold text-warning" id="inventorySummaryLowStock"><%= summary.lowStock %></div><div class="mini-note dashboard-metric-note">Need attention</div></div><div class="stat-icon yellow"><i class="bi bi-exclamation-triangle fs-4"></i></div></div></a></div>
-        <div class="col-md-6 col-xl-3"><a class="metric-card metric-card-link dashboard-metric-card p-4 h-100 d-block text-reset text-decoration-none" href="/inventory?status=Out%20of%20Stock"><div class="dashboard-metric-body d-flex justify-content-between"><div class="dashboard-metric-copy"><div class="mini-note dashboard-metric-label">Out of Stock</div><div class="dashboard-metric-value display-6 fw-bold text-danger" id="inventorySummaryOutOfStock"><%= summary.outOfStock %></div><div class="mini-note dashboard-metric-note">Needs reorder</div></div><div class="stat-icon red"><i class="bi bi-x-octagon fs-4"></i></div></div></a></div>
-      </div>
-      <div class="content-card p-4">
-        <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center mb-4">
-          <div><div class="section-title">Inventory Items</div><div class="mini-note"><%= user && user.role === "Admin" ? "Matches the Figma inventory table and modal fields." : "You can search and review the inventory list." %></div></div>
-          <% if (user && user.role === "Admin") { %>
-            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addItemModal"><i class="bi bi-plus-lg me-2"></i>Add Item</button>
-          <% } %>
-        </div>
-        <form class="row g-3 mb-3" method="get" action="/inventory" id="inventoryFilterForm">
-          <div class="col-md-6">
-            <div class="input-group position-relative">
-              <span class="input-group-text"><i class="bi bi-search"></i></span>
-              <input class="form-control" id="inventoryLiveSearch" name="search" value="<%= search %>" placeholder="<%= user && user.role === 'Admin' ? 'Search items by name, category, or supplier' : 'Search items by name or category' %>" autocomplete="off">
-            </div>
-            <div class="pos-suggestions list-group mt-2 d-none" id="inventorySuggestions"></div>
+      
+      <!-- Inventory Header & Metrics -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-6 col-xl-3">
+          <div class="content-card p-3 border-start border-4 border-primary h-100">
+            <div class="mini-note text-uppercase fw-bold">Total Items</div>
+            <div class="h2 mb-0 fw-bold" id="inventorySummaryTotal"><%= summary.total %></div>
           </div>
-          <div class="col-md-3">
-            <select class="form-select" name="status" id="inventoryStatusFilter">
-              <option value="all" <%= status === "all" ? "selected" : "" %>>All statuses</option>
-              <option value="In Stock" <%= status === "In Stock" ? "selected" : "" %>>In Stock</option>
-              <option value="Low Stock" <%= status === "Low Stock" ? "selected" : "" %>>Low Stock</option>
-              <option value="Out of Stock" <%= status === "Out of Stock" ? "selected" : "" %>>Out of Stock</option>
-              <option value="Low/Out of Stock" <%= status === "Low/Out of Stock" ? "selected" : "" %>>Low/Out of Stock</option>
+        </div>
+        <div class="col-md-6 col-xl-3">
+          <div class="content-card p-3 border-start border-4 border-success h-100">
+            <div class="mini-note text-uppercase fw-bold">In Stock</div>
+            <div class="h2 mb-0 fw-bold text-success" id="inventorySummaryInStock"><%= summary.inStock %></div>
+          </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+          <div class="content-card p-3 border-start border-4 border-warning h-100">
+            <div class="mini-note text-uppercase fw-bold">Low Stock</div>
+            <div class="h2 mb-0 fw-bold text-warning" id="inventorySummaryLowStock"><%= summary.lowStock %></div>
+          </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+          <div class="content-card p-3 border-start border-4 border-danger h-100">
+            <div class="mini-note text-uppercase fw-bold">Out of Stock</div>
+            <div class="h2 mb-0 fw-bold text-danger" id="inventorySummaryOutOfStock"><%= summary.outOfStock %></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="content-card p-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+          <div>
+            <div class="section-title">Inventory Management</div>
+            <div class="mini-note">Review and manage your store products.</div>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary btn-sm rounded-pill px-3" id="inventoryPrintButton">
+              <i class="bi bi-printer me-1"></i> Print
+            </button>
+            <% if (user && user.role === "Admin") { %>
+              <button class="btn btn-success rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#addItemModal">
+                <i class="bi bi-plus-lg me-1"></i> Add Item
+              </button>
+            <% } %>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="row g-2 mb-4">
+          <div class="col-md-7">
+            <div class="input-group shadow-sm rounded-3 overflow-hidden border">
+              <span class="input-group-text border-0 bg-white"><i class="bi bi-search text-muted"></i></span>
+              <input class="form-control border-0" id="inventoryLiveSearch" placeholder="Search by name, category, or supplier...">
+            </div>
+          </div>
+          <div class="col-md-5">
+            <select class="form-select border-0 shadow-sm bg-light" id="inventoryStatusFilter">
+              <option value="all">All Statuses</option>
+              <option value="In Stock">In Stock</option>
+              <option value="Low Stock">Low Stock</option>
+              <option value="Out of Stock">Out of Stock</option>
             </select>
           </div>
-          <div class="col-md-auto">
-            <div class="d-flex align-items-center gap-2">
-              <button class="btn btn-outline-secondary" type="button" id="inventoryPrintButton">Print List</button>
-              <button
-                class="btn btn-sm btn-outline-secondary rounded-circle d-inline-flex align-items-center justify-content-center"
-                type="button"
-                style="width: 1.9rem; height: 1.9rem;"
-                data-bs-toggle="tooltip"
-                data-bs-placement="right"
-                data-bs-title="Print the current inventory list using your active search and status filters. Use this after narrowing the table to the items you want to include."
-                aria-label="Print guide"
-              >
-                ?
-              </button>
-            </div>
-          </div>
-          <% if (search || status !== "all") { %>
-            <div class="col-md-auto"><a class="btn btn-outline-secondary" href="/inventory" id="inventoryClearLink">Clear</a></div>
-          <% } %>
-        </form>
-        <div class="mini-note mb-3 d-none" id="inventoryFilterSummary"></div>
+        </div>
+
         <div class="table-responsive">
-          <table class="table align-middle">
-            <thead>
+          <table class="table align-middle table-hover">
+            <thead class="bg-light">
               <tr>
-                <th>Item Name</th>
-                <th>Category</th>
-                <% if (user && user.role === "Admin") { %>
-                  <th>Supplier</th>
-                  <th class="text-end">Unit Price</th>
-                <% } %>
-                <th class="text-end">Selling Price</th>
-                <% if (user && user.role === "Admin") { %><th class="text-end">Profit</th><% } %>
-                <th>Status</th>
-                <% if (user && user.role === "Admin") { %><th class="text-end">Actions</th><% } %>
+                <th class="border-0 rounded-start ps-3">Item Details</th>
+                <th class="border-0 text-end">Price</th>
+                <th class="border-0">Status</th>
+                <th class="border-0 text-end rounded-end pe-3">Actions</th>
               </tr>
             </thead>
             <tbody id="inventoryTableBody">
               <% items.forEach((item) => { %>
-                <tr data-item-name="<%= item.name.toLowerCase() %>" data-item-category="<%= item.category.toLowerCase() %>" data-item-supplier="<%= (item.supplier || '').toLowerCase() %>" data-item-status="<%= item.status %>">
-                  <td class="fw-semibold"><%= item.name %></td>
-                  <td><%= item.category %></td>
-                  <% if (user && user.role === "Admin") { %>
-                    <td><%= item.supplier || "N/A" %></td>
-                    <td class="text-end"><%= formatCurrency(item.unit_price) %></td>
-                  <% } %>
-                  <td class="text-end"><%= formatCurrency(item.selling_price) %></td>
-                  <% if (user && user.role === "Admin") { %><td class="text-end text-success fw-semibold"><%= formatCurrency(item.profit) %></td><% } %>
-                  <td>
-                    <% if (item.status === "In Stock") { %><span class="badge badge-soft-success">In Stock</span>
-                    <% } else if (item.status === "Low Stock") { %><span class="badge badge-soft-warning">Low Stock</span>
-                    <% } else { %><span class="badge badge-soft-danger">Out of Stock</span><% } %>
+                <tr class="inventory-row">
+                  <td class="ps-3 py-3">
+                    <div class="fw-bold text-dark"><%= item.name %></div>
+                    <div class="mini-note text-muted"><%= item.category %> | <%= item.supplier || 'No Supplier' %></div>
                   </td>
-                  <% if (user && user.role === "Admin") { %>
-                    <td class="text-end">
-                      <button class="btn btn-sm btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#editItemModal-<%= item.id %>"><i class="bi bi-pencil"></i></button>
-                      <form class="d-inline" method="post" action="/inventory/<%= item.id %>/delete" onsubmit="return confirm('Delete this item?');"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button></form>
-                    </td>
-                  <% } %>
+                  <td class="text-end">
+                    <div class="fw-bold text-success"><%= formatCurrency(item.selling_price) %></div>
+                    <div class="mini-note text-muted">Cost: <%= formatCurrency(item.unit_price) %></div>
+                  </td>
+                  <td>
+                    <% if (item.status === "In Stock") { %>
+                      <span class="badge rounded-pill bg-success-subtle text-success px-3">IN STOCK</span>
+                    <% } else if (item.status === "Low Stock") { %>
+                      <span class="badge rounded-pill bg-warning-subtle text-warning px-3">LOW STOCK</span>
+                    <% } else { %>
+                      <span class="badge rounded-pill bg-danger-subtle text-danger px-3">OUT OF STOCK</span>
+                    <% } %>
+                  </td>
+                  <td class="text-end pe-3">
+                    <div class="d-flex justify-content-end gap-1">
+                      <button class="btn btn-sm btn-light rounded-circle" data-bs-toggle="modal" data-bs-target="#editItemModal-<%= item.id %>" title="Edit">
+                        <i class="bi bi-pencil text-primary"></i>
+                      </button>
+                      <form method="post" action="/inventory/<%= item.id %>/delete" onsubmit="return confirm('Delete this item?');" class="d-inline">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button class="btn btn-sm btn-light rounded-circle" title="Delete">
+                          <i class="bi bi-trash text-danger"></i>
+                        </button>
+                      </form>
+                    </div>
+                  </td>
                 </tr>
               <% }) %>
-              <tr id="inventoryEmptyRow" class="<%= items.length ? 'd-none' : '' %>">
-                <td colspan="<%= user && user.role === 'Admin' ? 8 : 4 %>" class="text-center py-4 mini-note">No inventory items matched the current filters.</td>
-              </tr>
             </tbody>
           </table>
         </div>
@@ -106,50 +122,177 @@
     </section>
   </main>
 </div>
+
 <% if (user && user.role === "Admin") { %>
+<!-- ADD ITEM MODAL (FLOATING PANEL) -->
 <div class="modal fade" id="addItemModal" tabindex="-1">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content">
-      <form method="post" action="/inventory/add">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4 shadow-lg border-0">
+      <form action="/inventory/add" method="post">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <div class="modal-header"><h5 class="modal-title">Add Inventory Item</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-        <div class="modal-body">
-            <div class="row g-3">
-              <div class="col-md-8"><label class="form-label">Item Name</label><input class="form-control" name="name" required></div>
-              <div class="col-md-4"><label class="form-label">Category</label><select class="form-select" name="category" required><option value="" selected disabled>Select category</option><% categories.forEach((category) => { %><option value="<%= category.category_name %>"><%= category.category_name %></option><% }) %></select></div>
-              <div class="col-md-6"><label class="form-label">Supplier</label><input class="form-control" name="supplier" list="supplierList" placeholder="e.g. Monde Nissin Distributor"></div>
-              <div class="col-md-4"><label class="form-label">Status</label><select class="form-select" name="status" required><option value="In Stock">In Stock</option><option value="Low Stock">Low Stock</option><option value="Out of Stock">Out of Stock</option></select></div>
-              <div class="col-md-4"><label class="form-label">Unit Price</label><input class="form-control" type="number" step="0.01" name="unitPrice" min="0" required></div>
-              <div class="col-md-4"><label class="form-label">Selling Price</label><input class="form-control" type="number" step="0.01" name="sellingPrice" min="0" required></div>
-            </div>
+        <div class="modal-header border-0 pb-0">
+          <div class="section-title">Add New Item</div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-success">Save Item</button></div>
+        <div class="modal-body p-4">
+          <div class="vstack gap-4">
+            <!-- STEP 1 -->
+            <div>
+              <div class="d-flex align-items-center gap-3 mb-3">
+                <span class="badge rounded-circle bg-dark text-white d-inline-flex align-items-center justify-content-center" style="width: 24px; height: 28px;">1</span>
+                <span class="fw-bold text-uppercase small">Basic Information</span>
+              </div>
+              <div class="mb-3">
+                <label class="form-label small fw-bold">Item Name</label>
+                <input class="form-control bg-light border-0 py-2" name="name" placeholder="e.g. Coca-Cola 1.5L" required>
+              </div>
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="form-label small fw-bold">Category</label>
+                  <select class="form-select bg-light border-0" name="category" required>
+                    <option value="" disabled selected>Select...</option>
+                    <% categories.forEach(cat => { %>
+                      <option value="<%= cat.category_name %>"><%= cat.category_name %></option>
+                    <% }) %>
+                  </select>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-bold">Supplier</label>
+                  <input class="form-control bg-light border-0" name="supplier" list="supplierList" placeholder="e.g. Monde">
+                </div>
+              </div>
+            </div>
+
+            <!-- STEP 2 -->
+            <div>
+              <div class="d-flex align-items-center gap-3 mb-3">
+                <span class="badge rounded-circle bg-dark text-white d-inline-flex align-items-center justify-content-center" style="width: 28px; height: 28px;">2</span>
+                <span class="fw-bold text-uppercase small">Pricing & Stock Status</span>
+              </div>
+              <div class="row g-2 mb-3">
+                <div class="col-6">
+                  <label class="form-label small fw-bold">Unit Cost (Capital)</label>
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text border-0 bg-white">₱</span>
+                    <input class="form-control bg-light border-0" type="number" step="0.01" name="unitPrice" placeholder="0.00" required>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-bold">Selling Price</label>
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text border-0 bg-white">₱</span>
+                    <input class="form-control bg-light border-0" type="number" step="0.01" name="sellingPrice" placeholder="0.00" required>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label class="form-label small fw-bold">Current Status</label>
+                <div class="d-flex gap-2 p-1 bg-light rounded-pill">
+                  <input class="btn-check" type="radio" name="status" id="statusInNew" value="In Stock" checked>
+                  <label class="btn btn-white btn-sm flex-grow-1 rounded-pill border-0" for="statusInNew">IN STOCK</label>
+                  <input class="btn-check" type="radio" name="status" id="statusLowNew" value="Low Stock">
+                  <label class="btn btn-white btn-sm flex-grow-1 rounded-pill border-0" for="statusLowNew">LOW</label>
+                  <input class="btn-check" type="radio" name="status" id="statusOutNew" value="Out of Stock">
+                  <label class="btn btn-white btn-sm flex-grow-1 rounded-pill border-0" for="statusOutNew">OUT</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-0 p-4 pt-0">
+          <button class="btn btn-success w-100 py-3 fw-bold rounded-3 shadow-sm">
+            <i class="bi bi-plus-lg me-2"></i>ADD TO INVENTORY
+          </button>
+        </div>
       </form>
     </div>
   </div>
 </div>
+
 <% items.forEach((item) => { %>
-  <div class="modal fade" id="editItemModal-<%= item.id %>" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content">
-        <form method="post" action="/inventory/<%= item.id %>/update">
-          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-          <div class="modal-header"><h5 class="modal-title">Edit Inventory Item</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-          <div class="modal-body">
-            <div class="row g-3">
-              <div class="col-md-8"><label class="form-label">Item Name</label><input class="form-control" name="name" value="<%= item.name %>" required></div>
-              <div class="col-md-4"><label class="form-label">Category</label><select class="form-select" name="category" required><% categories.forEach((category) => { %><option value="<%= category.category_name %>" <%= item.category === category.category_name ? "selected" : "" %>><%= category.category_name %></option><% }) %></select></div>
-              <div class="col-md-6"><label class="form-label">Supplier</label><input class="form-control" name="supplier" list="supplierList" value="<%= item.supplier || '' %>" placeholder="e.g. Monde Nissin Distributor"></div>
-              <div class="col-md-4"><label class="form-label">Status</label><select class="form-select" name="status" required><option value="In Stock" <%= item.status === "In Stock" ? "selected" : "" %>>In Stock</option><option value="Low Stock" <%= item.status === "Low Stock" ? "selected" : "" %>>Low Stock</option><option value="Out of Stock" <%= item.status === "Out of Stock" ? "selected" : "" %>>Out of Stock</option></select></div>
-              <div class="col-md-4"><label class="form-label">Unit Price</label><input class="form-control" type="number" step="0.01" name="unitPrice" min="0" value="<%= item.unit_price %>" required></div>
-              <div class="col-md-4"><label class="form-label">Selling Price</label><input class="form-control" type="number" step="0.01" name="sellingPrice" min="0" value="<%= item.selling_price %>" required></div>
+<!-- EDIT ITEM MODAL -->
+<div class="modal fade" id="editItemModal-<%= item.id %>" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4 shadow-lg border-0">
+      <form action="/inventory/<%= item.id %>/update" method="post">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="modal-header border-0 pb-0">
+          <div class="section-title">Edit Item Details</div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="vstack gap-4">
+            <!-- STEP 1 -->
+            <div>
+              <div class="d-flex align-items-center gap-3 mb-3">
+                <span class="badge rounded-circle bg-dark text-white d-inline-flex align-items-center justify-content-center" style="width: 24px; height: 28px;">1</span>
+                <span class="fw-bold text-uppercase small">Basic Information</span>
+              </div>
+              <div class="mb-3">
+                <label class="form-label small fw-bold">Item Name</label>
+                <input class="form-control bg-light border-0 py-2" name="name" value="<%= item.name %>" required>
+              </div>
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="form-label small fw-bold">Category</label>
+                  <select class="form-select bg-light border-0" name="category" required>
+                    <% categories.forEach(cat => { %>
+                      <option value="<%= cat.category_name %>" <%= item.category === cat.category_name ? 'selected' : '' %>><%= cat.category_name %></option>
+                    <% }) %>
+                  </select>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-bold">Supplier</label>
+                  <input class="form-control bg-light border-0" name="supplier" list="supplierList" value="<%= item.supplier || '' %>">
+                </div>
+              </div>
+            </div>
+
+            <!-- STEP 2 -->
+            <div>
+              <div class="d-flex align-items-center gap-3 mb-3">
+                <span class="badge rounded-circle bg-dark text-white d-inline-flex align-items-center justify-content-center" style="width: 28px; height: 28px;">2</span>
+                <span class="fw-bold text-uppercase small">Pricing & Stock Status</span>
+              </div>
+              <div class="row g-2 mb-3">
+                <div class="col-6">
+                  <label class="form-label small fw-bold">Unit Cost (Capital)</label>
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text border-0 bg-white">₱</span>
+                    <input class="form-control bg-light border-0" type="number" step="0.01" name="unitPrice" value="<%= item.unit_price %>" required>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-bold">Selling Price</label>
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text border-0 bg-white">₱</span>
+                    <input class="form-control bg-light border-0" type="number" step="0.01" name="sellingPrice" value="<%= item.selling_price %>" required>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label class="form-label small fw-bold">Current Status</label>
+                <div class="d-flex gap-2 p-1 bg-light rounded-pill">
+                  <input class="btn-check" type="radio" name="status" id="statusIn-<%= item.id %>" value="In Stock" <%= item.status === 'In Stock' ? 'checked' : '' %>>
+                  <label class="btn btn-white btn-sm flex-grow-1 rounded-pill border-0" for="statusIn-<%= item.id %>">IN STOCK</label>
+                  <input class="btn-check" type="radio" name="status" id="statusLow-<%= item.id %>" value="Low Stock" <%= item.status === 'Low Stock' ? 'checked' : '' %>>
+                  <label class="btn btn-white btn-sm flex-grow-1 rounded-pill border-0" for="statusLow-<%= item.id %>">LOW</label>
+                  <input class="btn-check" type="radio" name="status" id="statusOut-<%= item.id %>" value="Out of Stock" <%= item.status === 'Out of Stock' ? 'checked' : '' %>>
+                  <label class="btn btn-white btn-sm flex-grow-1 rounded-pill border-0" for="statusOut-<%= item.id %>">OUT</label>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-success">Update Item</button></div>
-        </form>
-      </div>
+        </div>
+        <div class="modal-footer border-0 p-4 pt-0">
+          <button class="btn btn-success w-100 py-3 fw-bold rounded-3 shadow-sm">
+            <i class="bi bi-check2-circle me-2"></i>UPDATE ITEM
+          </button>
+        </div>
+      </form>
     </div>
   </div>
+</div>
 <% }) %>
 <% } %>
 <datalist id="supplierList"><% suppliers.forEach((supplier) => { %><option value="<%= supplier.supplier_name %>"></option><% }) %></datalist>

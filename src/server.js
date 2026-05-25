@@ -661,6 +661,7 @@ app.get("/sales", requireAuth, requireSalesAccess, (req, res) => {
     metrics: getSalesMetrics(),
     saleDateDefault: isoDateToday(),
     inventory: listInventory("").filter((item) => item.status !== "Out of Stock"),
+    categories: listCategories(),
     formatCurrency
   });
 });
@@ -766,28 +767,15 @@ app.post("/settings/profile", requireAuth, (req, res) => {
 });
 
 app.post("/users/add", requireAuth, requireAdmin, (req, res) => {
-  const currentUser = getUserById(req.session.user.id);
   const username = String(req.body.username || "").trim();
   const fullName = String(req.body.fullName || "").trim();
   const email = String(req.body.email || "").trim();
   const phone = String(req.body.phone || "").trim();
   const password = String(req.body.password || "");
-  const pin = String(req.body.pin || "").trim();
-  const securityPin = String(req.body.securityPin || "").trim();
   const role = normalizeRole(req.body.role);
 
   if (!username || !fullName || !email || !phone || !password) {
-    setFlash(req, "danger", "All account fields except PIN are required for standard users.");
-    return res.redirect("/users");
-  }
-
-  if (role === "Admin" && !isFourDigitPin(pin)) {
-    setFlash(req, "danger", "New user PIN must be exactly 4 digits.");
-    return res.redirect("/users");
-  }
-
-  if (!isFourDigitPin(securityPin) || !verifyPin(securityPin, currentUser.pin_hash)) {
-    setFlash(req, "danger", "Security PIN is incorrect.");
+    setFlash(req, "danger", "All account fields are required.");
     return res.redirect("/users");
   }
 
@@ -798,8 +786,7 @@ app.post("/users/add", requireAuth, requireAdmin, (req, res) => {
       role,
       email,
       phone,
-      password,
-      pin
+      password
     });
     setFlash(req, "success", "User account created.");
   } catch (error) {
@@ -809,7 +796,6 @@ app.post("/users/add", requireAuth, requireAdmin, (req, res) => {
 });
 
 app.post("/users/:id/update", requireAuth, requireAdmin, (req, res) => {
-  const currentUser = getUserById(req.session.user.id);
   const targetUserId = Number(req.params.id);
   const targetUser = getUserById(targetUserId);
   const username = String(req.body.username || "").trim();
@@ -817,8 +803,7 @@ app.post("/users/:id/update", requireAuth, requireAdmin, (req, res) => {
   const email = String(req.body.email || "").trim();
   const phone = String(req.body.phone || "").trim();
   const password = String(req.body.password || "");
-  const pin = String(req.body.pin || "").trim();
-  const securityPin = String(req.body.securityPin || "").trim();
+  const role = normalizeRole(req.body.role);
 
   if (!targetUser) {
     setFlash(req, "danger", "User account not found.");
@@ -830,32 +815,16 @@ app.post("/users/:id/update", requireAuth, requireAdmin, (req, res) => {
     return res.redirect("/users");
   }
 
-  if (normalizeRole(req.body.role) === "Admin" && pin && !isFourDigitPin(pin)) {
-    setFlash(req, "danger", "Updated PIN must be exactly 4 digits.");
-    return res.redirect("/users");
-  }
-
-  if (normalizeRole(req.body.role) === "Admin" && !targetUser.pin_hash && !pin) {
-    setFlash(req, "danger", "Admin accounts must have a 4-digit PIN.");
-    return res.redirect("/users");
-  }
-
-  if (!isFourDigitPin(securityPin) || !verifyPin(securityPin, currentUser.pin_hash)) {
-    setFlash(req, "danger", "Security PIN is incorrect.");
-    return res.redirect("/users");
-  }
-
   try {
     updateUserAccount(targetUserId, {
       username,
       fullName,
-      role: normalizeRole(req.body.role),
+      role,
       email,
       phone,
-      password,
-      pin
+      password
     });
-    setFlash(req, "success", targetUserId === currentUser.id ? "Your account was updated." : "User account updated.");
+    setFlash(req, "success", "User account updated.");
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
