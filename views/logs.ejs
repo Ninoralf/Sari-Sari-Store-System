@@ -6,69 +6,80 @@
     <section class="p-3 p-lg-4">
       <%- include("partials/flash") %>
       <div class="content-card p-4 mb-4">
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-          <div>
+        <div class="row g-3 align-items-end">
+          <div class="col-md-4">
             <div class="section-title">Daily Logs</div>
-            <div class="mini-note">Filter product, eload, and GCash activity by date. Changing the date updates every section below.</div>
+            <div class="mini-note">Filter activity by date and search across all transaction types.</div>
           </div>
-          <div class="d-flex flex-wrap align-items-end gap-3">
-            <div>
-              <label class="form-label mb-1" for="logsDatePicker">Log Date</label>
-              <input class="form-control" id="logsDatePicker" type="date" value="<%= selectedDate %>">
+          <div class="col-md-3">
+            <label class="form-label mb-1 fw-bold small" for="logsDatePicker">Log Date</label>
+            <input class="form-control border-0 bg-light shadow-sm" id="logsDatePicker" type="date" value="<%= selectedDate %>">
+          </div>
+          <div class="col-md-5">
+            <label class="form-label mb-1 fw-bold small" for="logsSearchInput">Search Transactions</label>
+            <div class="input-group shadow-sm rounded-3 overflow-hidden border-0">
+              <span class="input-group-text border-0 bg-light"><i class="bi bi-search text-muted"></i></span>
+              <input class="form-control border-0 bg-light" id="logsSearchInput" placeholder="Search code, number, or employee...">
             </div>
           </div>
         </div>
       </div>
 
       <div class="row g-4">
+        <!-- PRODUCT LOGS -->
         <div class="col-12">
           <div class="content-card p-4">
-            <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
               <div>
                 <div class="section-title">Product Logs</div>
-                <div class="mini-note">All non-load item transactions for the selected date.</div>
+                <div class="mini-note">Non-load item transactions for the selected date.</div>
               </div>
-              <div class="badge rounded-pill text-bg-light border px-3 py-2" id="productLogsSummary"><%= logs.summary.productCount %> entries | <%= formatCurrency(logs.summary.productTotal) %></div>
+              <div class="d-flex flex-wrap gap-2 justify-content-end" id="productLogsSummary">
+                <div class="content-card border p-3 text-start bg-light-subtle" style="min-width: 140px;">
+                  <div class="mini-note text-uppercase fw-bold" style="font-size: 0.6rem;">Total Sales</div>
+                  <div class="fw-bold h5 mb-0 text-success"><%= formatCurrency(logs.summary.productTotal) %></div>
+                  <div class="mini-note"><%= logs.summary.productCount %> entries</div>
+                </div>
+              </div>
             </div>
             <div class="table-responsive">
-              <table class="table align-middle mb-0">
-                <thead>
+              <table class="table align-middle mb-0 table-hover">
+                <thead class="table-light">
                   <tr>
-                    <th>Log ID</th>
+                    <th class="ps-3">Log ID</th>
                     <th>Transaction</th>
                     <th class="text-end">Total Amount</th>
                     <th>Employee</th>
                     <th>Time Stamp</th>
-                    <th class="text-end">Items</th>
+                    <th class="text-end pe-3">Items</th>
                   </tr>
                 </thead>
                 <tbody id="productLogsBody">
                   <% if (logs.productLogs.length) { %>
                     <% logs.productLogs.forEach((entry) => { %>
-                      <tr>
-                        <td class="fw-semibold"><%= entry.logId %></td>
-                        <td class="fw-semibold"><%= entry.transactionCode %></td>
-                        <td class="text-end"><%= formatCurrency(entry.totalAmount) %></td>
-                        <td><%= entry.employee || "-" %></td>
-                        <td><%= formatDateTime(entry.timeStamp) %></td>
-                        <td class="text-end">
+                      <tr class="log-row" data-search="<%= (entry.transactionCode + ' ' + (entry.employee || '')).toLowerCase() %>">
+                        <td class="ps-3 font-monospace small text-muted">#<%= entry.logId %></td>
+                        <td class="fw-bold text-dark"><%= entry.transactionCode %></td>
+                        <td class="text-end fw-bold"><%= formatCurrency(entry.totalAmount) %></td>
+                        <td><span class="badge bg-light text-dark border-0"><%= entry.employee || "-" %></span></td>
+                        <td><div class="small"><%= formatDateTime(entry.timeStamp) %></div></td>
+                        <td class="text-end pe-3">
                           <button
-                            class="btn btn-sm btn-outline-secondary rounded-circle product-log-popover"
+                            class="btn btn-sm btn-light rounded-circle product-log-popover shadow-sm"
                             type="button"
                             data-bs-toggle="popover"
                             data-bs-trigger="focus"
                             data-bs-placement="left"
                             data-log-id="<%= entry.logId %>"
                             data-log-items='<%- JSON.stringify(entry.items) %>'
-                            aria-label="Show purchased products"
                           >
-                            <i class="bi bi-list-ul"></i>
+                            <i class="bi bi-list-ul text-primary"></i>
                           </button>
                         </td>
                       </tr>
                     <% }) %>
                   <% } else { %>
-                    <tr><td colspan="6" class="text-center py-4 mini-note">No product logs for this date.</td></tr>
+                    <tr><td colspan="6" class="text-center py-5 opacity-50"><i class="bi bi-inbox display-6 d-block mb-2"></i>No product logs for this date.</td></tr>
                   <% } %>
                 </tbody>
               </table>
@@ -76,59 +87,63 @@
           </div>
         </div>
 
+        <!-- ELOAD LOGS -->
         <div class="col-12">
           <div class="content-card p-4">
-            <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
               <div>
                 <div class="section-title">Eload Logs</div>
+                <div class="mini-note">Digital load service history.</div>
               </div>
               <div class="d-flex flex-wrap gap-2 justify-content-end" id="eloadLogsSummary">
-                <div class="content-card border p-3 text-start">
-                  <div class="fw-semibold"><%= logs.summary.eloadCount %> entries</div>
-                  <div class="mini-note"><%= formatCurrency(logs.summary.eloadTotal) %></div>
+                <div class="content-card border p-3 text-start bg-light-subtle" style="min-width: 140px;">
+                  <div class="mini-note text-uppercase fw-bold" style="font-size: 0.6rem;">Volume</div>
+                  <div class="fw-bold h5 mb-0"><%= formatCurrency(logs.summary.eloadTotal) %></div>
+                  <div class="mini-note"><%= logs.summary.eloadCount %> entries</div>
                 </div>
-                <div class="content-card border p-3 text-start">
-                  <div class="fw-semibold text-success">Completed</div>
-                  <div class="fw-semibold"><%= logs.summary.eloadCompletedCount %> entries</div>
-                  <div class="mini-note"><%= formatCurrency(logs.summary.eloadCompletedTotal) %></div>
+                <div class="content-card border p-3 text-start bg-success-subtle" style="min-width: 140px;">
+                  <div class="mini-note text-uppercase fw-bold text-success" style="font-size: 0.6rem;">Completed</div>
+                  <div class="fw-bold h5 mb-0 text-success"><%= formatCurrency(logs.summary.eloadCompletedTotal) %></div>
+                  <div class="mini-note"><%= logs.summary.eloadCompletedCount %> entries</div>
                 </div>
-                <div class="content-card border p-3 text-start">
-                  <div class="fw-semibold text-warning">Failed</div>
-                  <div class="fw-semibold"><%= logs.summary.eloadFailedCount %> entries</div>
-                  <div class="mini-note"><%= formatCurrency(logs.summary.eloadFailedTotal) %></div>
+                <div class="content-card border p-3 text-start bg-warning-subtle" style="min-width: 140px;">
+                  <div class="mini-note text-uppercase fw-bold text-warning-emphasis" style="font-size: 0.6rem;">Failed</div>
+                  <div class="fw-bold h5 mb-0 text-warning-emphasis"><%= formatCurrency(logs.summary.eloadFailedTotal) %></div>
+                  <div class="mini-note"><%= logs.summary.eloadFailedCount %> entries</div>
                 </div>
               </div>
             </div>
             <div class="table-responsive">
-              <table class="table align-middle mb-0">
-                <thead>
+              <table class="table align-middle mb-0 table-hover">
+                <thead class="table-light">
                   <tr>
-                    <th>Request</th>
+                    <th class="ps-3">Request</th>
                     <th>Number</th>
                     <th>Network</th>
                     <th>Load Item</th>
-                    <th>Requested</th>
-                    <th>Completed</th>
+                    <th>Staff Info</th>
                     <th>Status</th>
-                    <th class="text-end">Amount</th>
+                    <th class="text-end pe-3">Amount</th>
                   </tr>
                 </thead>
                 <tbody id="eloadLogsBody">
                   <% if (logs.eloadLogs.length) { %>
                     <% logs.eloadLogs.forEach((entry) => { %>
-                      <tr>
-                        <td class="fw-semibold"><%= entry.requestCode %></td>
-                        <td><%= entry.number || "-" %></td>
-                        <td><%= entry.network || "-" %></td>
-                        <td><%= entry.loadValue || "-" %></td>
-                        <td><%= entry.requestedBy || "-" %><div class="mini-note"><%= formatDateTime(entry.requestedAt) %></div></td>
-                        <td><%= entry.completedBy || "-" %><div class="mini-note"><%= formatDateTime(entry.completedAt) %></div></td>
-                        <td><span class="badge <%= entry.status === "Completed" ? "text-bg-success" : "text-bg-warning" %>"><%= entry.status %></span></td>
-                        <td class="text-end"><%= formatCurrency(entry.amount) %></td>
+                      <tr class="log-row" data-search="<%= (entry.requestCode + ' ' + (entry.number || '') + ' ' + (entry.requestedBy || '') + ' ' + (entry.completedBy || '')).toLowerCase() %>">
+                        <td class="ps-3 fw-bold text-dark font-monospace"><%= entry.requestCode %></td>
+                        <td class="fw-bold"><%= entry.number || "-" %></td>
+                        <td><span class="badge bg-success-subtle text-success border-0 px-2"><%= entry.network || "-" %></span></td>
+                        <td class="small"><%= entry.loadValue || "-" %></td>
+                        <td>
+                          <div class="small fw-bold"><%= entry.requestedBy || "-" %></div>
+                          <div class="mini-note text-muted"><%= formatDateTime(entry.requestedAt) %></div>
+                        </td>
+                        <td><span class="badge rounded-pill <%= entry.status === "Completed" ? "bg-success-subtle text-success" : "bg-warning-subtle text-warning" %> px-3"><%= entry.status.toUpperCase() %></span></td>
+                        <td class="text-end pe-3 fw-bold text-success"><%= formatCurrency(entry.amount) %></td>
                       </tr>
                     <% }) %>
                   <% } else { %>
-                    <tr><td colspan="8" class="text-center py-4 mini-note">No eload logs for this date.</td></tr>
+                    <tr><td colspan="8" class="text-center py-5 opacity-50"><i class="bi bi-inbox display-6 d-block mb-2"></i>No eload logs for this date.</td></tr>
                   <% } %>
                 </tbody>
               </table>
@@ -136,59 +151,63 @@
           </div>
         </div>
 
+        <!-- GCASH LOGS -->
         <div class="col-12">
           <div class="content-card p-4">
-            <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
               <div>
                 <div class="section-title">GCash Logs</div>
+                <div class="mini-note">Cash-in and cash-out activity.</div>
               </div>
               <div class="d-flex flex-wrap gap-2 justify-content-end" id="gcashLogsSummary">
-                <div class="content-card border p-3 text-start">
-                  <div class="fw-semibold"><%= logs.summary.gcashCount %> entries</div>
-                  <div class="mini-note"><%= formatCurrency(logs.summary.gcashTotal) %></div>
+                <div class="content-card border p-3 text-start bg-light-subtle" style="min-width: 140px;">
+                  <div class="mini-note text-uppercase fw-bold" style="font-size: 0.6rem;">Volume</div>
+                  <div class="fw-bold h5 mb-0"><%= formatCurrency(logs.summary.gcashTotal) %></div>
+                  <div class="mini-note"><%= logs.summary.gcashCount %> entries</div>
                 </div>
-                <div class="content-card border p-3 text-start">
-                  <div class="fw-semibold">Completed</div>
-                  <div class="fw-semibold text-success"><%= logs.summary.gcashCompletedCount %> entries</div>
-                  <div class="mini-note"><%= formatCurrency(logs.summary.gcashCompletedTotal) %></div>
+                <div class="content-card border p-3 text-start bg-success-subtle" style="min-width: 140px;">
+                  <div class="mini-note text-uppercase fw-bold text-success" style="font-size: 0.6rem;">Completed</div>
+                  <div class="fw-bold h5 mb-0 text-success"><%= formatCurrency(logs.summary.gcashCompletedTotal) %></div>
+                  <div class="mini-note"><%= logs.summary.gcashCompletedCount %> entries</div>
                 </div>
-                <div class="content-card border p-3 text-start">
-                  <div class="fw-semibold">Failed</div>
-                  <div class="fw-semibold text-warning"><%= logs.summary.gcashFailedCount %> entries</div>
-                  <div class="mini-note"><%= formatCurrency(logs.summary.gcashFailedTotal) %></div>
+                <div class="content-card border p-3 text-start bg-warning-subtle" style="min-width: 140px;">
+                  <div class="mini-note text-uppercase fw-bold text-warning-emphasis" style="font-size: 0.6rem;">Failed</div>
+                  <div class="fw-bold h5 mb-0 text-warning-emphasis"><%= formatCurrency(logs.summary.gcashFailedTotal) %></div>
+                  <div class="mini-note"><%= logs.summary.gcashFailedCount %> entries</div>
                 </div>
               </div>
             </div>
             <div class="table-responsive">
-              <table class="table align-middle mb-0">
-                <thead>
+              <table class="table align-middle mb-0 table-hover">
+                <thead class="table-light">
                   <tr>
-                    <th>Request</th>
+                    <th class="ps-3">Request</th>
                     <th>Number</th>
                     <th>Reference No.</th>
-                    <th>Requested</th>
-                    <th>Completed</th>
-                    <th>Cash IN/OUT</th>
+                    <th>Type</th>
+                    <th>Staff Info</th>
                     <th>Status</th>
-                    <th class="text-end">Paid</th>
+                    <th class="text-end pe-3">Paid</th>
                   </tr>
                 </thead>
                 <tbody id="gcashLogsBody">
                   <% if (logs.gcashLogs.length) { %>
                     <% logs.gcashLogs.forEach((entry) => { %>
-                      <tr>
-                        <td class="fw-semibold"><%= entry.requestCode %></td>
-                        <td><%= entry.number || "-" %></td>
-                        <td><%= entry.referenceNo || "-" %></td>
-                        <td><%= entry.requestedBy || "-" %><div class="mini-note"><%= formatDateTime(entry.requestedAt) %></div></td>
-                        <td><%= entry.completedBy || "-" %><div class="mini-note"><%= formatDateTime(entry.completedAt) %></div></td>
-                        <td><%= entry.requestKind || "Cash In" %></td>
-                        <td><span class="badge <%= entry.status === "Completed" ? "text-bg-success" : "text-bg-warning" %>"><%= entry.status %></span></td>
-                        <td class="text-end"><%= formatCurrency(entry.totalAmount) %></td>
+                      <tr class="log-row" data-search="<%= (entry.requestCode + ' ' + (entry.number || '') + ' ' + (entry.referenceNo || '') + ' ' + (entry.requestedBy || '') + ' ' + (entry.completedBy || '')).toLowerCase() %>">
+                        <td class="ps-3 fw-bold text-dark font-monospace"><%= entry.requestCode %></td>
+                        <td class="fw-bold"><%= entry.number || "-" %></td>
+                        <td class="small font-monospace text-muted"><%= entry.referenceNo || "-" %></td>
+                        <td><span class="badge <%= entry.requestKind === 'Cash In' ? 'bg-primary-subtle text-primary' : 'bg-info-subtle text-info' %> border-0 px-2"><%= entry.requestKind || "Cash In" %></span></td>
+                        <td>
+                          <div class="small fw-bold"><%= entry.requestedBy || "-" %></div>
+                          <div class="mini-note text-muted"><%= formatDateTime(entry.requestedAt) %></div>
+                        </td>
+                        <td><span class="badge rounded-pill <%= entry.status === "Completed" ? "bg-success-subtle text-success" : "bg-warning-subtle text-warning" %> px-3"><%= entry.status.toUpperCase() %></span></td>
+                        <td class="text-end pe-3 fw-bold text-success"><%= formatCurrency(entry.totalAmount) %></td>
                       </tr>
                     <% }) %>
                   <% } else { %>
-                    <tr><td colspan="8" class="text-center py-4 mini-note">No GCash logs for this date.</td></tr>
+                    <tr><td colspan="8" class="text-center py-5 opacity-50"><i class="bi bi-inbox display-6 d-block mb-2"></i>No GCash logs for this date.</td></tr>
                   <% } %>
                 </tbody>
               </table>
@@ -202,6 +221,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
   const logsDatePicker = document.getElementById("logsDatePicker");
+  const logsSearchInput = document.getElementById("logsSearchInput");
   const productLogsBody = document.getElementById("productLogsBody");
   const eloadLogsBody = document.getElementById("eloadLogsBody");
   const gcashLogsBody = document.getElementById("gcashLogsBody");
@@ -232,28 +252,36 @@
     });
   }
 
+  function handleSearch() {
+    const query = logsSearchInput.value.toLowerCase().trim();
+    document.querySelectorAll(".log-row").forEach(row => {
+      const text = row.dataset.search || "";
+      row.classList.toggle("d-none", query && !text.includes(query));
+    });
+  }
+
   function renderRows(body, rows, emptyMessage, columns, formatter) {
     if (!rows.length) {
-      body.innerHTML = `<tr><td colspan="${columns}" class="text-center py-4 mini-note">${emptyMessage}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="${columns}" class="text-center py-5 opacity-50"><i class="bi bi-inbox display-6 d-block mb-2"></i>${emptyMessage}</td></tr>`;
       return;
     }
     body.innerHTML = formatter(rows);
+    handleSearch(); // Re-apply current search filter
   }
 
   function renderProductPopoverContent(items) {
     if (!items?.length) {
-      return '<div class="mini-note">No purchased products recorded for this log.</div>';
+      return '<div class="mini-note text-center p-3">No purchased products recorded.</div>';
     }
 
     return `
-      <div class="fw-semibold mb-2">Purchased Products</div>
+      <div class="fw-bold mb-2 small text-uppercase text-muted">Purchased Products</div>
       <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0">
-          <thead>
+        <table class="table table-sm align-middle mb-0" style="font-size: 0.85rem;">
+          <thead class="table-light">
             <tr>
               <th>Product</th>
               <th class="text-end">Qty</th>
-              <th class="text-end">Price</th>
               <th class="text-end">Amount</th>
             </tr>
           </thead>
@@ -262,8 +290,7 @@
               <tr>
                 <td>${escapeHtml(item.itemName)}</td>
                 <td class="text-end">${item.quantity}</td>
-                <td class="text-end">${peso.format(item.sellingPrice)}</td>
-                <td class="text-end">${peso.format(item.amount)}</td>
+                <td class="text-end fw-bold">${peso.format(item.amount)}</td>
               </tr>
             `).join("")}
           </tbody>
@@ -280,7 +307,7 @@
       bootstrap.Popover.getOrCreateInstance(button, {
         html: true,
         sanitize: false,
-        customClass: "product-log-popover-card",
+        customClass: "product-log-popover-card shadow-lg",
         content: renderProductPopoverContent(items)
       });
     });
@@ -297,61 +324,68 @@
       if (!response.ok) throw new Error("Failed to load logs.");
       const payload = await response.json();
 
-      productLogsSummary.textContent = `${payload.summary.productCount} entries | ${peso.format(payload.summary.productTotal)}`;
-      eloadLogsSummary.innerHTML = `
-        <div class="content-card border p-3 text-start">
-          <div class="mini-note">Total</div>
-          <div class="fw-semibold">${payload.summary.eloadCount} entries</div>
-          <div class="mini-note">${peso.format(payload.summary.eloadTotal)}</div>
-        </div>
-        <div class="content-card border p-3 text-start">
-          <div class="mini-note">Completed</div>
-          <div class="fw-semibold text-success">${payload.summary.eloadCompletedCount} entries</div>
-          <div class="mini-note">${peso.format(payload.summary.eloadCompletedTotal)}</div>
-        </div>
-        <div class="content-card border p-3 text-start">
-          <div class="mini-note">Failed</div>
-          <div class="fw-semibold text-warning">${payload.summary.eloadFailedCount} entries</div>
-          <div class="mini-note">${peso.format(payload.summary.eloadFailedTotal)}</div>
+      productLogsSummary.innerHTML = `
+        <div class="content-card border p-3 text-start bg-light-subtle" style="min-width: 140px;">
+          <div class="mini-note text-uppercase fw-bold" style="font-size: 0.6rem;">Total Sales</div>
+          <div class="fw-bold h5 mb-0 text-success">${peso.format(payload.summary.productTotal)}</div>
+          <div class="mini-note">${payload.summary.productCount} entries</div>
         </div>
       `;
+
+      eloadLogsSummary.innerHTML = `
+        <div class="content-card border p-3 text-start bg-light-subtle" style="min-width: 140px;">
+          <div class="mini-note text-uppercase fw-bold" style="font-size: 0.6rem;">Volume</div>
+          <div class="fw-bold h5 mb-0">${peso.format(payload.summary.eloadTotal)}</div>
+          <div class="mini-note">${payload.summary.eloadCount} entries</div>
+        </div>
+        <div class="content-card border p-3 text-start bg-success-subtle" style="min-width: 140px;">
+          <div class="mini-note text-uppercase fw-bold text-success" style="font-size: 0.6rem;">Completed</div>
+          <div class="fw-bold h5 mb-0 text-success">${peso.format(payload.summary.eloadCompletedTotal)}</div>
+          <div class="mini-note">${payload.summary.eloadCompletedCount} entries</div>
+        </div>
+        <div class="content-card border p-3 text-start bg-warning-subtle" style="min-width: 140px;">
+          <div class="mini-note text-uppercase fw-bold text-warning-emphasis" style="font-size: 0.6rem;">Failed</div>
+          <div class="fw-bold h5 mb-0 text-warning-emphasis">${peso.format(payload.summary.eloadFailedTotal)}</div>
+          <div class="mini-note">${payload.summary.eloadFailedCount} entries</div>
+        </div>
+      `;
+
       gcashLogsSummary.innerHTML = `
-        <div class="content-card border p-3 text-start">
-          <div class="mini-note">Total</div>
-          <div class="fw-semibold">${payload.summary.gcashCount} entries</div>
-          <div class="mini-note">${peso.format(payload.summary.gcashTotal)}</div>
+        <div class="content-card border p-3 text-start bg-light-subtle" style="min-width: 140px;">
+          <div class="mini-note text-uppercase fw-bold" style="font-size: 0.6rem;">Volume</div>
+          <div class="fw-bold h5 mb-0">${peso.format(payload.summary.gcashTotal)}</div>
+          <div class="mini-note">${payload.summary.gcashCount} entries</div>
         </div>
-        <div class="content-card border p-3 text-start">
-          <div class="mini-note">Completed</div>
-          <div class="fw-semibold text-success">${payload.summary.gcashCompletedCount} entries</div>
-          <div class="mini-note">${peso.format(payload.summary.gcashCompletedTotal)}</div>
+        <div class="content-card border p-3 text-start bg-success-subtle" style="min-width: 140px;">
+          <div class="mini-note text-uppercase fw-bold text-success" style="font-size: 0.6rem;">Completed</div>
+          <div class="fw-bold h5 mb-0 text-success">${peso.format(payload.summary.gcashCompletedTotal)}</div>
+          <div class="mini-note">${payload.summary.gcashCompletedCount} entries</div>
         </div>
-        <div class="content-card border p-3 text-start">
-          <div class="mini-note">Failed</div>
-          <div class="fw-semibold text-warning">${payload.summary.gcashFailedCount} entries</div>
-          <div class="mini-note">${peso.format(payload.summary.gcashFailedTotal)}</div>
+        <div class="content-card border p-3 text-start bg-warning-subtle" style="min-width: 140px;">
+          <div class="mini-note text-uppercase fw-bold text-warning-emphasis" style="font-size: 0.6rem;">Failed</div>
+          <div class="fw-bold h5 mb-0 text-warning-emphasis">${peso.format(payload.summary.gcashFailedTotal)}</div>
+          <div class="mini-note">${payload.summary.gcashFailedCount} entries</div>
         </div>
       `;
 
       renderRows(productLogsBody, payload.productLogs, "No product logs for this date.", 6, (rows) => rows.map((entry) => `
-        <tr>
-          <td class="fw-semibold">${entry.logId}</td>
-          <td class="fw-semibold">${escapeHtml(entry.transactionCode)}</td>
-          <td class="text-end">${peso.format(entry.totalAmount)}</td>
-          <td>${escapeHtml(entry.employee || "-")}</td>
-          <td>${escapeHtml(formatDateTimeClient(entry.timeStamp))}</td>
-          <td class="text-end">
+        <tr class="log-row" data-search="${(entry.transactionCode + ' ' + (entry.employee || '')).toLowerCase()}">
+          <td class="ps-3 font-monospace small text-muted">#${entry.logId}</td>
+          <td class="fw-bold text-dark">${escapeHtml(entry.transactionCode)}</td>
+          <td class="text-end fw-bold">${peso.format(entry.totalAmount)}</td>
+          <td><span class="badge bg-light text-dark border-0">${escapeHtml(entry.employee || "-")}</span></td>
+          <td><div class="small">${escapeHtml(formatDateTimeClient(entry.timeStamp))}</div></td>
+          <td class="text-end pe-3">
             <button
-              class="btn btn-sm btn-outline-secondary rounded-circle product-log-popover"
+              class="btn btn-sm btn-light rounded-circle product-log-popover shadow-sm"
               type="button"
               data-bs-toggle="popover"
               data-bs-trigger="focus"
               data-bs-placement="left"
               data-log-id="${entry.logId}"
               data-log-items='${escapeHtml(JSON.stringify(entry.items || []))}'
-              aria-label="Show purchased products"
             >
-              <i class="bi bi-list-ul"></i>
+              <i class="bi bi-list-ul text-primary"></i>
             </button>
           </td>
         </tr>
@@ -359,28 +393,32 @@
       bindProductLogPopovers();
 
       renderRows(eloadLogsBody, payload.eloadLogs, "No eload logs for this date.", 8, (rows) => rows.map((entry) => `
-        <tr>
-          <td class="fw-semibold">${escapeHtml(entry.requestCode)}</td>
-          <td>${escapeHtml(entry.number || "-")}</td>
-          <td>${escapeHtml(entry.network || "-")}</td>
-          <td>${escapeHtml(entry.loadValue || "-")}</td>
-          <td>${escapeHtml(entry.requestedBy || "-")}<div class="mini-note">${escapeHtml(formatDateTimeClient(entry.requestedAt))}</div></td>
-          <td>${escapeHtml(entry.completedBy || "-")}<div class="mini-note">${escapeHtml(formatDateTimeClient(entry.completedAt))}</div></td>
-          <td><span class="badge ${entry.status === "Completed" ? "text-bg-success" : "text-bg-warning"}">${escapeHtml(entry.status || "Pending")}</span></td>
-          <td class="text-end">${peso.format(entry.amount)}</td>
+        <tr class="log-row" data-search="${(entry.requestCode + ' ' + (entry.number || '') + ' ' + (entry.requestedBy || '') + ' ' + (entry.completedBy || '')).toLowerCase()}">
+          <td class="ps-3 fw-bold text-dark font-monospace">${escapeHtml(entry.requestCode)}</td>
+          <td class="fw-bold">${escapeHtml(entry.number || "-")}</td>
+          <td><span class="badge bg-success-subtle text-success border-0 px-2">${escapeHtml(entry.network || "-")}</span></td>
+          <td class="small">${escapeHtml(entry.loadValue || "-")}</td>
+          <td>
+            <div class="small fw-bold">${escapeHtml(entry.requestedBy || "-")}</div>
+            <div class="mini-note text-muted">${escapeHtml(formatDateTimeClient(entry.requestedAt))}</div>
+          </td>
+          <td><span class="badge rounded-pill ${entry.status === "Completed" ? "bg-success-subtle text-success" : "bg-warning-subtle text-warning"} px-3">${escapeHtml(entry.status.toUpperCase())}</span></td>
+          <td class="text-end pe-3 fw-bold text-success">${peso.format(entry.amount)}</td>
         </tr>
       `).join(""));
 
       renderRows(gcashLogsBody, payload.gcashLogs, "No GCash logs for this date.", 8, (rows) => rows.map((entry) => `
-        <tr>
-          <td class="fw-semibold">${escapeHtml(entry.requestCode)}</td>
-          <td>${escapeHtml(entry.number || "-")}</td>
-          <td>${escapeHtml(entry.referenceNo || "-")}</td>
-          <td>${escapeHtml(entry.requestedBy || "-")}<div class="mini-note">${escapeHtml(formatDateTimeClient(entry.requestedAt))}</div></td>
-          <td>${escapeHtml(entry.completedBy || "-")}<div class="mini-note">${escapeHtml(formatDateTimeClient(entry.completedAt))}</div></td>
-          <td>${escapeHtml(entry.requestKind || "Cash In")}</td>
-          <td><span class="badge ${entry.status === "Completed" ? "text-bg-success" : "text-bg-warning"}">${escapeHtml(entry.status || "Pending")}</span></td>
-          <td class="text-end">${peso.format(entry.totalAmount)}</td>
+        <tr class="log-row" data-search="${(entry.requestCode + ' ' + (entry.number || '') + ' ' + (entry.referenceNo || '') + ' ' + (entry.requestedBy || '') + ' ' + (entry.completedBy || '')).toLowerCase()}">
+          <td class="ps-3 fw-bold text-dark font-monospace">${escapeHtml(entry.requestCode)}</td>
+          <td class="fw-bold">${escapeHtml(entry.number || "-")}</td>
+          <td class="small font-monospace text-muted">${escapeHtml(entry.referenceNo || "-")}</td>
+          <td><span class="badge ${entry.requestKind === 'Cash In' ? 'bg-primary-subtle text-primary' : 'bg-info-subtle text-info'} border-0 px-2">${escapeHtml(entry.requestKind || "Cash In")}</span></td>
+          <td>
+            <div class="small fw-bold">${escapeHtml(entry.requestedBy || "-")}</div>
+            <div class="mini-note text-muted">${escapeHtml(formatDateTimeClient(entry.requestedAt))}</div>
+          </td>
+          <td><span class="badge rounded-pill ${entry.status === "Completed" ? "bg-success-subtle text-success" : "bg-warning-subtle text-warning"} px-3">${escapeHtml(entry.status.toUpperCase())}</span></td>
+          <td class="text-end pe-3 fw-bold text-success">${peso.format(entry.totalAmount)}</td>
         </tr>
       `).join(""));
 
@@ -396,6 +434,8 @@
     if (!logsDatePicker.value) return;
     loadLogs(logsDatePicker.value);
   });
+
+  logsSearchInput.addEventListener("input", handleSearch);
 
   bindProductLogPopovers();
 </script>

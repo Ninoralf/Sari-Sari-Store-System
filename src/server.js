@@ -440,7 +440,7 @@ app.get("/api/sales/metrics", requireApiAuth, requireSalesApiAccess, (req, res) 
   return res.json(getSalesMetrics());
 });
 
-app.get("/api/logs", requireApiAuth, requireAdminApi, (req, res) => {
+app.get("/api/logs", requireApiAuth, (req, res) => {
   const date = String(req.query.date || isoDateToday());
   return res.json(getLogsData(date));
 });
@@ -652,9 +652,23 @@ app.post("/inventory/add", requireAuth, requireAdmin, (req, res) => {
   res.redirect("/inventory");
 });
 
-app.post("/inventory/:id/update", requireAuth, requireAdmin, (req, res) => {
+app.post("/inventory/:id/update", requireAuth, (req, res) => {
   try {
-    updateInventoryItem(Number(req.params.id), req.body);
+    const currentUser = getUserById(req.session.user.id);
+    const isAdmin = currentUser?.role === "Admin";
+    const itemId = Number(req.params.id);
+
+    if (isAdmin) {
+      updateInventoryItem(itemId, req.body);
+    } else {
+      // Non-admin can only update status
+      const existing = listInventory("").find(i => i.id === itemId);
+      if (!existing) throw new Error("Item not found.");
+      updateInventoryItem(itemId, {
+        ...existing,
+        status: req.body.status
+      });
+    }
     setFlash(req, "success", "Inventory item updated.");
   } catch (error) {
     setFlash(req, "danger", error.message);
@@ -718,7 +732,7 @@ app.get("/reports", requireAuth, requireAdmin, (req, res) => {
   res.render("reports", { pageTitle: "Reports", todayLabel: todayLabel(), reports: getReportsData(), formatCurrency });
 });
 
-app.get("/logs", requireAuth, requireAdmin, (req, res) => {
+app.get("/logs", requireAuth, (req, res) => {
   const selectedDate = String(req.query.date || isoDateToday());
   res.render("logs", {
     pageTitle: "Logs",
