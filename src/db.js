@@ -99,6 +99,7 @@ function createSchema() {
       email TEXT NOT NULL,
       phone TEXT NOT NULL,
       password_hash TEXT NOT NULL,
+      plain_password TEXT NOT NULL DEFAULT '',
       pin_hash TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE IF NOT EXISTS inventory_items (
@@ -245,8 +246,8 @@ function ensureUserSchema() {
   const columns = db.prepare("PRAGMA table_info(users)").all();
   const columnNames = new Set(columns.map((column) => column.name));
 
-  if (!columnNames.has("pin_hash")) {
-    db.exec("ALTER TABLE users ADD COLUMN pin_hash TEXT NOT NULL DEFAULT ''");
+  if (!columnNames.has("plain_password")) {
+    db.exec("ALTER TABLE users ADD COLUMN plain_password TEXT NOT NULL DEFAULT ''");
   }
 }
 
@@ -719,8 +720,8 @@ function backfillLogTablesFromSales() {
 
 function seedDefaults() {
   const insertDefaultUser = db.prepare(`
-    INSERT INTO users (username, full_name, role, email, phone, password_hash, pin_hash)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO users (username, full_name, role, email, phone, password_hash, plain_password, pin_hash)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const findUserByUsername = db.prepare("SELECT id FROM users WHERE username = ?");
   const defaultUsers = [
@@ -730,8 +731,7 @@ function seedDefaults() {
       role: "Admin",
       email: "owner@sarisaristore.com",
       phone: "+63 912 345 6789",
-      password: "admin123",
-      pin: "1234"
+      password: "admin123"
     },
     {
       username: "user",
@@ -739,10 +739,8 @@ function seedDefaults() {
       role: "User",
       email: "user@sarisaristore.com",
       phone: "+63 912 345 6790",
-      password: "user123",
-      pin: ""
+      password: "user123"
     }
-
   ];
 
   for (const user of defaultUsers) {
@@ -754,16 +752,14 @@ function seedDefaults() {
         user.email,
         user.phone,
         hashPassword(user.password),
-        user.role === "Admin" ? hashPin(user.pin) : ""
+        user.password,
+        ""
       );
     }
   }
 
-  const usersMissingPin = db.prepare("SELECT id FROM users WHERE role = 'Admin' AND (pin_hash = '' OR pin_hash IS NULL)").all();
-  const assignDefaultPin = db.prepare("UPDATE users SET pin_hash = ? WHERE id = ?");
-  for (const user of usersMissingPin) {
-    assignDefaultPin.run(hashPin("1234"), user.id);
-  }
+  // Remove PINs for all users as requested
+  db.exec("UPDATE users SET pin_hash = ''");
 
   if (!db.prepare("SELECT COUNT(*) AS count FROM store_settings").get().count) {
     db.prepare(`
@@ -833,7 +829,7 @@ export function getUserById(id) {
 }
 
 export function listUsers() {
-  return db.prepare("SELECT id, username, full_name, role, email, phone FROM users ORDER BY full_name, username").all();
+  return db.prepare("SELECT id, username, full_name, role, email, phone, plain_password FROM users ORDER BY full_name, username").all();
 }
 
 export function listSuppliers() {
@@ -955,8 +951,8 @@ export function updateUserProfile(userId, input) {
 
 export function createUserAccount(input) {
   db.prepare(`
-    INSERT INTO users (username, full_name, role, email, phone, password_hash, pin_hash)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO users (username, full_name, role, email, phone, password_hash, plain_password, pin_hash)
+    VALUES (?, ?, ?, ?, ?, ?, ?, '')
   `).run(
     input.username,
     input.fullName,
@@ -964,7 +960,7 @@ export function createUserAccount(input) {
     input.email,
     input.phone,
     hashPassword(input.password),
-    input.role === "Admin" ? hashPin(input.pin) : ""
+    input.password
   );
 }
 
@@ -978,20 +974,14 @@ export function updateUserAccount(userId, input) {
   if (input.password) {
     updatePassword(userId, input.password);
   }
-
-  if (input.role === "User") {
-    db.prepare("UPDATE users SET pin_hash = '' WHERE id = ?").run(userId);
-  } else if (input.pin) {
-    db.prepare("UPDATE users SET pin_hash = ? WHERE id = ?").run(hashPin(input.pin), userId);
-  }
 }
 
 export function updateUserPin(userId, newPin) {
-  db.prepare("UPDATE users SET pin_hash = ? WHERE id = ?").run(hashPin(newPin), userId);
+  // No-op as PINs are removed
 }
 
 export function updatePassword(userId, newPassword) {
-  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword(newPassword), userId);
+  db.prepare("UPDATE users SET password_hash = ?, plain_password = ? WHERE id = ?").run(hashPassword(newPassword), newPassword, userId);
 }
 
 export function updateNotifications(input) {

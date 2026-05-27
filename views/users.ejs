@@ -13,19 +13,15 @@
                 <div class="section-title">Add User Account</div>
                 <div class="mini-note">Create a new admin or user account for the system.</div>
               </div>
-              <span class="badge text-bg-light">PIN Protected</span>
             </div>
             <form action="/users/add" method="post" class="row g-3">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <div class="col-md-6"><label class="form-label">Username</label><input class="form-control" name="username" required></div>
-              <div class="col-md-6"><label class="form-label">Role</label><select class="form-select" name="role" data-role-select><option value="Admin">Admin</option><option value="User">User</option></select></div>
+              <div class="col-md-6"><label class="form-label">Role</label><select class="form-select" name="role"><option value="Admin">Admin</option><option value="User">User</option></select></div>
               <div class="col-12"><label class="form-label">Full Name</label><input class="form-control" name="fullName" required></div>
               <div class="col-md-6"><label class="form-label">Email</label><input class="form-control" type="email" name="email" required></div>
               <div class="col-md-6"><label class="form-label">Contact Number</label><input class="form-control" name="phone" required></div>
-              <div class="col-md-6"><label class="form-label">Password</label><input class="form-control" type="password" name="password" required></div>
-              <div class="col-md-6" data-pin-field><label class="form-label">New User PIN</label><input class="form-control" type="password" name="pin" pattern="\d{4}" inputmode="numeric" maxlength="4" placeholder="4 digits for admin only"></div>
-              <div class="col-12"><label class="form-label">Your Security PIN</label><input class="form-control" type="password" name="securityPin" pattern="\d{4}" inputmode="numeric" maxlength="4" placeholder="Enter your 4-digit PIN to confirm" required></div>
-              <div class="col-12 mini-note">Admin accounts use a 4-digit PIN. User accounts do not have a PIN. Existing migrated admin accounts default to <strong>1234</strong> until changed.</div>
+              <div class="col-12"><label class="form-label">Password</label><input class="form-control" type="password" name="password" required></div>
               <div class="col-12"><button class="btn btn-success">Create Account</button></div>
             </form>
           </div>
@@ -55,15 +51,23 @@
                       <form action="/users/<%= account.id %>/update" method="post" class="row g-3">
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                         <div class="col-md-6"><label class="form-label">Username</label><input class="form-control" name="username" value="<%= account.username %>" required></div>
-                        <div class="col-md-6"><label class="form-label">Role</label><select class="form-select" name="role" data-role-select><option value="Admin" <%= account.role === "Admin" ? "selected" : "" %>>Admin</option><option value="User" <%= account.role === "User" ? "selected" : "" %>>User</option></select></div>
+                        <div class="col-md-6"><label class="form-label">Role</label><select class="form-select" name="role"><option value="Admin" <%= account.role === "Admin" ? "selected" : "" %>>Admin</option><option value="User" <%= account.role === "User" ? "selected" : "" %>>User</option></select></div>
                         <div class="col-12"><label class="form-label">Full Name</label><input class="form-control" name="fullName" value="<%= account.full_name %>" required></div>
                         <div class="col-md-6"><label class="form-label">Email</label><input class="form-control" type="email" name="email" value="<%= account.email %>" required></div>
                         <div class="col-md-6"><label class="form-label">Contact Number</label><input class="form-control" name="phone" value="<%= account.phone %>" required></div>
-                        <div class="col-md-6"><label class="form-label">New Password</label><input class="form-control" type="password" name="password" placeholder="Leave blank to keep current password"></div>
-                        <div class="col-md-6" data-pin-field><label class="form-label">New 4-Digit PIN</label><input class="form-control" type="password" name="pin" pattern="\d{4}" inputmode="numeric" maxlength="4" placeholder="Admin only, leave blank to keep current PIN"></div>
-                        <div class="col-12"><label class="form-label">Your Security PIN</label><input class="form-control" type="password" name="securityPin" pattern="\d{4}" inputmode="numeric" maxlength="4" placeholder="Required to save changes" required></div>
-                        <div class="col-12 d-flex justify-content-between align-items-center">
-                          <div class="mini-note">Every update requires your 4-digit PIN for extra security.</div>
+                        
+                        <div class="col-12">
+                          <label class="form-label">Current Password</label>
+                          <div class="input-group">
+                            <input class="form-control bg-light" type="password" value="<%= account.plain_password %>" readonly data-password-display>
+                            <button class="btn btn-outline-secondary" type="button" data-password-toggle><i class="bi bi-eye"></i></button>
+                          </div>
+                          <div class="mini-note mt-1">This is the current password visible only to administrators.</div>
+                        </div>
+
+                        <div class="col-12"><label class="form-label">Reset/New Password</label><input class="form-control" type="password" name="password" placeholder="Enter a new password to reset it"></div>
+                        
+                        <div class="col-12 d-flex justify-content-end align-items-center">
                           <button class="btn btn-success">Save Changes</button>
                         </div>
                       </form>
@@ -80,21 +84,18 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  document.querySelectorAll("form").forEach((form) => {
-    const roleSelect = form.querySelector("[data-role-select]");
-    const pinField = form.querySelector("[data-pin-field]");
-    const pinInput = pinField?.querySelector("input[name='pin']");
-    if (!roleSelect || !pinField || !pinInput) return;
-
-    function syncRolePinState() {
-      const isAdmin = roleSelect.value === "Admin";
-      pinField.classList.toggle("d-none", !isAdmin);
-      pinInput.disabled = !isAdmin;
-      if (!isAdmin) pinInput.value = "";
-    }
-
-    roleSelect.addEventListener("change", syncRolePinState);
-    syncRolePinState();
+  document.querySelectorAll("[data-password-toggle]").forEach(button => {
+    button.addEventListener("click", () => {
+      const input = button.parentElement.querySelector("[data-password-display]");
+      const icon = button.querySelector("i");
+      if (input.type === "password") {
+        input.type = "text";
+        icon.classList.replace("bi-eye", "bi-eye-slash");
+      } else {
+        input.type = "password";
+        icon.classList.replace("bi-eye-slash", "bi-eye");
+      }
+    });
   });
 </script>
 </body>

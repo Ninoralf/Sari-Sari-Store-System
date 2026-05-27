@@ -32,7 +32,9 @@
         <th>Category</th>
         <th>Supplier</th>
         <th>Status</th>
-        <th class="text-end">Unit Price</th>
+        <% if (user && user.role === "Admin") { %>
+          <th class="text-end">Unit Price</th>
+        <% } %>
         <th class="text-end">Selling Price</th>
       </tr>
     </thead>
@@ -44,13 +46,15 @@
             <td><%= item.category %></td>
             <td><%= item.supplier || "N/A" %></td>
             <td><%= item.status %></td>
-            <td class="text-end"><%= formatCurrency(item.unit_price) %></td>
+            <% if (user && user.role === "Admin") { %>
+              <td class="text-end"><%= formatCurrency(item.unit_price) %></td>
+            <% } %>
             <td class="text-end"><%= formatCurrency(item.selling_price) %></td>
           </tr>
         <% }) %>
       <% } else { %>
         <tr>
-          <td colspan="6">No inventory items matched the selected filters.</td>
+          <td colspan="<%= user && user.role === 'Admin' ? 6 : 5 %>">No inventory items matched the selected filters.</td>
         </tr>
       <% } %>
     </tbody>
