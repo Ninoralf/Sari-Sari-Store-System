@@ -77,7 +77,11 @@
                 <th class="border-0 rounded-start ps-3">Item Details</th>
                 <th class="border-0 text-end">Price</th>
                 <th class="border-0">Status</th>
-                <th class="border-0 text-end rounded-end pe-3">Actions</th>
+                <% if (user && user.role === "Admin") { %>
+                  <th class="border-0 text-end rounded-end pe-3">Actions</th>
+                <% } else { %>
+                  <th class="border-0 rounded-end"></th>
+                <% } %>
               </tr>
             </thead>
             <tbody id="inventoryTableBody">
@@ -89,7 +93,9 @@
                   </td>
                   <td class="text-end">
                     <div class="fw-bold text-success"><%= formatCurrency(item.selling_price) %></div>
-                    <div class="mini-note text-muted">Cost: <%= formatCurrency(item.unit_price) %></div>
+                    <% if (user && user.role === "Admin") { %>
+                      <div class="mini-note text-muted">Cost: <%= formatCurrency(item.unit_price) %></div>
+                    <% } %>
                   </td>
                   <td>
                     <% if (item.status === "In Stock") { %>
@@ -101,17 +107,19 @@
                     <% } %>
                   </td>
                   <td class="text-end pe-3">
-                    <div class="d-flex justify-content-end gap-1">
-                      <button class="btn btn-sm btn-light rounded-circle" data-bs-toggle="modal" data-bs-target="#editItemModal-<%= item.id %>" title="Edit">
-                        <i class="bi bi-pencil text-primary"></i>
-                      </button>
-                      <form method="post" action="/inventory/<%= item.id %>/delete" onsubmit="return confirm('Delete this item?');" class="d-inline">
-                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                        <button class="btn btn-sm btn-light rounded-circle" title="Delete">
-                          <i class="bi bi-trash text-danger"></i>
+                    <% if (user && user.role === "Admin") { %>
+                      <div class="d-flex justify-content-end gap-1">
+                        <button class="btn btn-sm btn-light rounded-circle" data-bs-toggle="modal" data-bs-target="#editItemModal-<%= item.id %>" title="Edit">
+                          <i class="bi bi-pencil text-primary"></i>
                         </button>
-                      </form>
-                    </div>
+                        <form method="post" action="/inventory/<%= item.id %>/delete" onsubmit="return confirm('Delete this item?');" class="d-inline">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                          <button class="btn btn-sm btn-light rounded-circle" title="Delete">
+                            <i class="bi bi-trash text-danger"></i>
+                          </button>
+                        </form>
+                      </div>
+                    <% } %>
                   </td>
                 </tr>
               <% }) %>
@@ -341,26 +349,38 @@
 
   function renderInventoryRows(items) {
     if (!items.length) {
-      inventoryTableBody.innerHTML = `<tr id="inventoryEmptyRow"><td colspan="${canManageInventory ? 8 : 4}" class="text-center py-4 mini-note">No inventory items matched the current filters.</td></tr>`;
+      inventoryTableBody.innerHTML = `<tr id="inventoryEmptyRow"><td colspan="4" class="text-center py-4 mini-note">No inventory items matched the current filters.</td></tr>`;
       return;
     }
 
     inventoryTableBody.innerHTML = items.map((item) => `
-      <tr>
-        <td class="fw-semibold">${escapeHtml(item.name)}</td>
-        <td>${escapeHtml(item.category)}</td>
-        ${canManageInventory ? `<td>${escapeHtml(item.supplier || "N/A")}</td>` : ""}
-        ${canManageInventory ? `<td class="text-end">${peso.format(item.unit_price)}</td>` : ""}
-        <td class="text-end">${peso.format(item.selling_price)}</td>
-        ${canManageInventory ? `<td class="text-end text-success fw-semibold">${peso.format(item.profit)}</td>` : ""}
-        <td>${item.status === "In Stock" ? '<span class="badge badge-soft-success">In Stock</span>' : item.status === "Low Stock" ? '<span class="badge badge-soft-warning">Low Stock</span>' : '<span class="badge badge-soft-danger">Out of Stock</span>'}</td>
-        ${canManageInventory ? `<td class="text-end">
-          <button class="btn btn-sm btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#editItemModal-${item.id}"><i class="bi bi-pencil"></i></button>
-          <form class="d-inline" method="post" action="/inventory/${item.id}/delete" onsubmit="return confirm('Delete this item?');">
-            <input type="hidden" name="_csrf" value="${csrfToken}">
-            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
-          </form>
-        </td>` : ""}
+      <tr class="inventory-row">
+        <td class="ps-3 py-3">
+          <div class="fw-bold text-dark">${escapeHtml(item.name)}</div>
+          <div class="mini-note text-muted">${escapeHtml(item.category)} | ${escapeHtml(item.supplier || "No Supplier")}</div>
+        </td>
+        <td class="text-end">
+          <div class="fw-bold text-success">${peso.format(item.selling_price)}</div>
+          ${canManageInventory ? `<div class="mini-note text-muted">Cost: ${peso.format(item.unit_price)}</div>` : ""}
+        </td>
+        <td>
+          ${item.status === "In Stock" ? '<span class="badge rounded-pill bg-success-subtle text-success px-3">IN STOCK</span>' : item.status === "Low Stock" ? '<span class="badge rounded-pill bg-warning-subtle text-warning px-3">LOW STOCK</span>' : '<span class="badge rounded-pill bg-danger-subtle text-danger px-3">OUT OF STOCK</span>'}
+        </td>
+        <td class="text-end pe-3">
+          ${canManageInventory ? `
+            <div class="d-flex justify-content-end gap-1">
+              <button class="btn btn-sm btn-light rounded-circle" data-bs-toggle="modal" data-bs-target="#editItemModal-${item.id}" title="Edit">
+                <i class="bi bi-pencil text-primary"></i>
+              </button>
+              <form method="post" action="/inventory/${item.id}/delete" onsubmit="return confirm('Delete this item?');" class="d-inline">
+                <input type="hidden" name="_csrf" value="${csrfToken}">
+                <button class="btn btn-sm btn-light rounded-circle" title="Delete">
+                  <i class="bi bi-trash text-danger"></i>
+                </button>
+              </form>
+            </div>
+          ` : ""}
+        </td>
       </tr>
     `).join("");
   }

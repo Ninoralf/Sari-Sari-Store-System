@@ -327,6 +327,14 @@ function normalizeRole(value) {
   return String(value || "").trim().toLowerCase() === "user" ? "User" : "Admin";
 }
 
+function sanitizeInventoryItems(items, isAdmin) {
+  if (isAdmin) return items;
+  return items.map((item) => {
+    const { unit_price, profit, ...rest } = item;
+    return rest;
+  });
+}
+
 function isFourDigitPin(value) {
   return /^\d{4}$/.test(String(value || "").trim());
 }
@@ -359,6 +367,8 @@ function buildDigitalRequestsFingerprint(requests) {
 }
 
 app.get("/", requireAuth, (req, res) => {
+  const currentUser = getUserById(req.session.user.id);
+  const isAdmin = currentUser?.role === "Admin";
   const dashboard = getDashboardData();
   const chartData = getDashboardChartData();
   res.render("dashboard", {
@@ -366,7 +376,7 @@ app.get("/", requireAuth, (req, res) => {
     todayLabel: todayLabel(),
     currentDateLabel: formatLongDate(isoDateToday()),
     metrics: dashboard.metrics,
-    lowStockItems: dashboard.lowStockItems,
+    lowStockItems: sanitizeInventoryItems(dashboard.lowStockItems, isAdmin),
     pendingEloadRequests: dashboard.pendingEloadRequests,
     pendingGcashRequests: dashboard.pendingGcashRequests,
     bestSellingItem: dashboard.bestSellingItem,
@@ -382,11 +392,13 @@ app.get("/api/dashboard/chart", requireApiAuth, (req, res) => {
 });
 
 app.get("/api/dashboard/overview", requireApiAuth, (req, res) => {
+  const currentUser = getUserById(req.session.user.id);
+  const isAdmin = currentUser?.role === "Admin";
   const dashboard = getDashboardData();
   return res.json({
     metrics: dashboard.metrics,
     bestSellingItem: dashboard.bestSellingItem,
-    lowStockItems: dashboard.lowStockItems,
+    lowStockItems: sanitizeInventoryItems(dashboard.lowStockItems, isAdmin),
     pendingEloadRequests: dashboard.pendingEloadRequests,
     pendingGcashRequests: dashboard.pendingGcashRequests
   });
@@ -399,15 +411,18 @@ app.get("/api/notifications", requireApiAuth, (req, res) => {
 });
 
 app.get("/api/inventory", requireApiAuth, (req, res) => {
+  const currentUser = getUserById(req.session.user.id);
+  const isAdmin = currentUser?.role === "Admin";
   const search = String(req.query.search || "");
   const status = normalizeInventoryStatus(req.query.status);
   const items = listInventory(search, status);
+
   return res.json({
     search,
     status,
     summary: getInventorySummary(),
     count: items.length,
-    items
+    items: sanitizeInventoryItems(items, isAdmin)
   });
 });
 
@@ -516,12 +531,15 @@ app.post("/logout", requireAuth, (req, res) => {
 });
 
 app.get("/inventory", requireAuth, (req, res) => {
+  const currentUser = getUserById(req.session.user.id);
+  const isAdmin = currentUser?.role === "Admin";
   const search = req.query.search || "";
   const status = normalizeInventoryStatus(req.query.status);
+  const items = listInventory(search, status);
   res.render("inventory", {
     pageTitle: "Inventory",
     todayLabel: todayLabel(),
-    items: listInventory(search, status),
+    items: sanitizeInventoryItems(items, isAdmin),
     summary: getInventorySummary(),
     search,
     status,
@@ -655,12 +673,15 @@ app.post("/inventory/:id/delete", requireAuth, requireAdmin, (req, res) => {
 });
 
 app.get("/sales", requireAuth, requireSalesAccess, (req, res) => {
+  const currentUser = getUserById(req.session.user.id);
+  const isAdmin = currentUser?.role === "Admin";
+  const inventory = listInventory("").filter((item) => item.status !== "Out of Stock");
   res.render("sales", {
     pageTitle: "Sales",
     todayLabel: todayLabel(),
     metrics: getSalesMetrics(),
     saleDateDefault: isoDateToday(),
-    inventory: listInventory("").filter((item) => item.status !== "Out of Stock"),
+    inventory: sanitizeInventoryItems(inventory, isAdmin),
     categories: listCategories(),
     formatCurrency
   });
@@ -734,12 +755,15 @@ app.get("/settings", requireAuth, (req, res) => {
 });
 
 app.get("/inventory/print", requireAuth, (req, res) => {
+  const currentUser = getUserById(req.session.user.id);
+  const isAdmin = currentUser?.role === "Admin";
   const search = String(req.query.search || "");
   const status = normalizeInventoryStatus(req.query.status);
+  const items = listInventory(search, status);
   res.render("inventory-print", {
     pageTitle: "Print Inventory List",
     todayLabel: todayLabel(),
-    items: listInventory(search, status),
+    items: sanitizeInventoryItems(items, isAdmin),
     search,
     status,
     formatCurrency

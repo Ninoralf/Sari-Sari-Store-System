@@ -5,35 +5,52 @@
     <%- include("partials/topbar") %>
     <section class="p-3 p-lg-4">
       <%- include("partials/flash") %>
-      <div class="row g-4">
-        <!-- Input Section -->
-        <div class="col-xl-6 mx-auto">
-          <div class="content-card p-4 h-100">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-              <div>
-                <div class="section-title">New Request</div>
-                <div class="mini-note mb-3">Create a new digital service transaction.</div>
-              </div>
-              <button class="btn btn-outline-warning btn-sm rounded-pill px-3 fw-bold shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#pendingQueueCollapse">
-                <i class="bi bi-clock-history me-1"></i> VIEW QUEUE (<%= requests.filter(r => r.status === 'Pending').length %>)
-              </button>
-            </div>
 
-            <!-- STEP 1 -->
-            <div class="mb-4">
-              <div class="d-flex align-items-center gap-3 mb-3">
-                <span class="badge rounded-circle bg-dark text-white d-inline-flex align-items-center justify-content-center" style="width: 28px; height: 28px;">1</span>
-                <span class="fw-bold text-uppercase small">Choose Service Type</span>
-              </div>
-              <div class="nav nav-pills nav-fill bg-light p-1 rounded-pill" role="tablist">
-                <button class="nav-link active rounded-pill py-2 border-0" id="tab-eload" data-bs-toggle="tab" data-bs-target="#panel-eload" type="button"><i class="bi bi-phone me-2"></i>eLoad</button>
-                <button class="nav-link rounded-pill py-2 border-0" id="tab-gcash" data-bs-toggle="tab" data-bs-target="#panel-gcash" type="button"><i class="bi bi-wallet2 me-2"></i>GCash</button>
-              </div>
-            </div>
+      <!-- View Toggle Switch -->
+      <div class="d-flex justify-content-center mb-4">
+        <div class="nav nav-pills bg-light p-1 rounded-pill shadow-sm" style="width: 320px;" role="tablist">
+          <button class="nav-link active rounded-pill py-2 border-0 flex-grow-1" id="nav-request-tab" data-bs-toggle="tab" data-bs-target="#view-request" type="button" role="tab" aria-controls="view-request" aria-selected="true">
+            <i class="bi bi-plus-circle me-2"></i>Request
+          </button>
+          <button class="nav-link rounded-pill py-2 border-0 flex-grow-1 position-relative" id="nav-queue-tab" data-bs-toggle="tab" data-bs-target="#view-queue" type="button" role="tab" aria-controls="view-queue" aria-selected="false">
+            <i class="bi bi-clock-history me-2"></i>Queue
+            <% const pendingCount = requests.filter(r => r.status === 'Pending').length; %>
+            <% if (pendingCount > 0) { %>
+              <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light" style="font-size: 0.65rem;">
+                <%= pendingCount %>
+              </span>
+            <% } %>
+          </button>
+        </div>
+      </div>
+
+      <div class="tab-content" id="eloadViewContent" style="min-height: 400px;">
+        <!-- REQUEST VIEW -->
+        <div class="tab-pane fade show active" id="view-request" role="tabpanel" aria-labelledby="nav-request-tab">
+          <div class="row g-4">
+            <!-- Input Section -->
+            <div class="col-xl-6 mx-auto">
+              <div class="content-card p-4">
+                <div class="mb-4">
+                  <div class="section-title">New Request</div>
+                  <div class="mini-note">Create a new digital service transaction.</div>
+                </div>
+
+                <!-- STEP 1 -->
+                <div class="mb-4">
+                  <div class="d-flex align-items-center gap-3 mb-3">
+                    <span class="badge rounded-circle bg-dark text-white d-inline-flex align-items-center justify-content-center" style="width: 28px; height: 28px;">1</span>
+                    <span class="fw-bold text-uppercase small">Choose Service Type</span>
+                  </div>
+                  <div class="nav nav-pills nav-fill bg-light p-1 rounded-pill" role="tablist">
+                    <button class="nav-link active rounded-pill py-2 border-0" id="tab-eload" data-bs-toggle="tab" data-bs-target="#panel-eload" type="button" role="tab"><i class="bi bi-phone me-2"></i>eLoad</button>
+                    <button class="nav-link rounded-pill py-2 border-0" id="tab-gcash" data-bs-toggle="tab" data-bs-target="#panel-gcash" type="button" role="tab"><i class="bi bi-wallet2 me-2"></i>GCash</button>
+                  </div>
+                </div>
 
             <div class="tab-content">
               <!-- eLoad Panel -->
-              <div class="tab-pane fade show active" id="panel-eload">
+              <div class="tab-pane fade show active" id="panel-eload" role="tabpanel">
                 <form id="eloadForm" action="/eload/requests" method="post" class="row g-3">
                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                   <input type="hidden" name="serviceType" value="eload">
@@ -167,86 +184,122 @@
                   </div>
                 </form>
               </div>
-            </div>
-          </div>
-        </div>
+            </div> <!-- End Inner Tab Content -->
+          </div> <!-- End Content Card -->
+        </div> <!-- End Col -->
+      </div> <!-- End Row -->
+    </div> <!-- End View Request Tab Pane -->
 
-        <!-- Pending Queue Section (Hidden by Default) -->
-        <div class="col-12 collapse mt-4" id="pendingQueueCollapse">
-          <div class="content-card p-4 bg-light-subtle">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-              <div>
-                <div class="section-title">Pending Queue</div>
-                <div class="mini-note">Requests waiting for fulfillment.</div>
-              </div>
-              <button class="btn-close" type="button" data-bs-toggle="collapse" data-bs-target="#pendingQueueCollapse"></button>
-            </div>
-            
-            <!-- (Queue content remains same as before) -->
-            <div class="row g-3" id="pendingQueueList">
-              <% const pending = requests.filter(r => r.status === 'Pending'); %>
-              <% if (!pending.length) { %>
-                <div class="text-center py-5 opacity-50">
-                  <i class="bi bi-hourglass-split display-1 d-block mb-3"></i>
-                  <div class="fw-bold">Queue is empty</div>
-                  <div class="mini-note">All digital services are up to date.</div>
+    <!-- QUEUE VIEW -->
+    <div class="tab-pane fade" id="view-queue" role="tabpanel">
+          <div class="row g-4">
+            <!-- Pending Section -->
+            <div class="col-lg-6">
+              <div class="content-card p-4 h-100">
+                <div class="mb-4">
+                  <div class="section-title">Pending Queue</div>
+                  <div class="mini-note">Requests waiting for fulfillment.</div>
                 </div>
-              <% } else { %>
-                <% pending.forEach(req => { %>
-                  <div class="request-card p-3 bg-white rounded-4 border shadow-sm border-start border-4 <%= req.service_type === 'gcash' ? 'border-primary' : 'border-success' %>">
-                    <div class="d-flex justify-content-between align-items-start mb-3">
-                      <div>
-                        <div class="d-flex align-items-center gap-2 mb-1">
-                          <span class="badge <%= req.service_type === 'gcash' ? 'bg-primary' : 'bg-success' %> text-uppercase small"><%= req.service_type %></span>
-                          <span class="fw-bold text-dark"><%= req.request_code %></span>
+
+                <div class="vstack gap-3" id="pendingQueueList">
+                  <% const pending = requests.filter(r => r.status === 'Pending'); %>
+                  <% if (!pending.length) { %>
+                    <div class="text-center py-5 opacity-50">
+                      <i class="bi bi-hourglass-split display-1 d-block mb-3"></i>
+                      <div class="fw-bold text-muted">Queue is empty</div>
+                    </div>
+                  <% } else { %>
+                    <% pending.forEach(req => { %>
+                      <div class="request-card p-3 bg-white rounded-4 border shadow-sm border-start border-4 <%= req.service_type === 'gcash' ? 'border-primary' : 'border-success' %>">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                          <div>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                              <span class="badge <%= req.service_type === 'gcash' ? 'bg-primary' : 'bg-success' %> text-uppercase small" style="font-size: 0.6rem;"><%= req.service_type %></span>
+                              <span class="fw-bold text-dark small"><%= req.request_code %></span>
+                            </div>
+                            <div class="h5 mb-0 fw-bold font-monospace"><%= req.mobile_number %></div>
+                            <div class="mini-note text-muted"><%= req.service_type === 'gcash' ? req.request_kind : `${req.network} | ${req.load_value}` %></div>
+                          </div>
+                          <div class="text-end">
+                            <div class="h4 mb-0 fw-bold text-success">₱<%= req.amount.toLocaleString() %></div>
+                            <div class="mini-note">by <%= req.requested_by_name %></div>
+                          </div>
                         </div>
-                        <div class="h5 mb-0 fw-bold font-monospace"><%= req.mobile_number %></div>
-                        <div class="mini-note text-muted"><%= req.service_type === 'gcash' ? req.request_kind : `${req.network} | ${req.load_value}` %></div>
-                      </div>
-                      <div class="text-end">
-                        <div class="h4 mb-0 fw-bold text-success">₱<%= req.amount.toLocaleString() %></div>
-                        <div class="mini-note">by <%= req.requested_by_name %></div>
-                      </div>
-                    </div>
 
-                    <% if (req.notes) { %>
-                      <div class="bg-light p-2 rounded mb-3 border-start border-3 border-warning">
-                        <div class="mini-note fw-bold text-warning-emphasis">STAF NOTE:</div>
-                        <div class="small"><%= req.notes %></div>
-                      </div>
-                    <% } %>
+                        <% if (req.notes) { %>
+                          <div class="bg-light p-2 rounded mb-3 border-start border-3 border-warning">
+                            <div class="mini-note fw-bold text-warning-emphasis">NOTE:</div>
+                            <div class="small"><%= req.notes %></div>
+                          </div>
+                        <% } %>
 
-                    <div class="d-flex gap-2">
-                      <button class="btn btn-sm btn-dark flex-grow-1 py-2 fw-bold rounded-pill" data-bs-toggle="collapse" data-bs-target="#complete-<%= req.id %>">
-                        <i class="bi bi-check2-circle me-1"></i>FULFILL
-                      </button>
-                      <button class="btn btn-sm btn-outline-danger px-3 rounded-pill" data-bs-toggle="modal" data-bs-target="#failRequestModal" data-request-id="<%= req.id %>" data-request-code="<%= req.request_code %>">
-                        <i class="bi bi-x-circle"></i>
-                      </button>
-                      <button class="btn btn-sm btn-outline-secondary px-3 rounded-pill" onclick="navigator.clipboard.writeText('<%= req.mobile_number %>')" title="Copy Number">
-                        <i class="bi bi-clipboard"></i>
-                      </button>
-                    </div>
-
-                    <div class="collapse mt-3" id="complete-<%= req.id %>">
-                      <form action="/eload/requests/<%= req.id %>/complete" method="post" class="bg-light p-3 rounded-3 border">
-                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                        <label class="form-label small fw-bold">Reference Number</label>
-                        <div class="input-group">
-                          <input class="form-control form-control-sm" name="referenceNumber" placeholder="Enter Ref #" required>
-                          <button class="btn btn-sm btn-success px-3">SAVE</button>
+                        <div class="d-flex gap-2">
+                          <button class="btn btn-sm btn-dark flex-grow-1 py-2 fw-bold rounded-pill" data-bs-toggle="collapse" data-bs-target="#complete-<%= req.id %>">
+                            <i class="bi bi-check2-circle me-1"></i>FULFILL
+                          </button>
+                          <button class="btn btn-sm btn-outline-danger px-3 rounded-pill" data-bs-toggle="modal" data-bs-target="#failRequestModal" data-request-id="<%= req.id %>" data-request-code="<%= req.request_code %>">
+                            <i class="bi bi-x-circle"></i>
+                          </button>
+                          <button class="btn btn-sm btn-outline-secondary px-3 rounded-pill" onclick="navigator.clipboard.writeText('<%= req.mobile_number %>')" title="Copy Number">
+                            <i class="bi bi-clipboard"></i>
+                          </button>
                         </div>
-                        <div class="mini-note mt-2 text-center text-secondary">Verify transaction before saving.</div>
-                      </form>
+
+                        <div class="collapse mt-3" id="complete-<%= req.id %>">
+                          <form action="/eload/requests/<%= req.id %>/complete" method="post" class="bg-light p-3 rounded-3 border">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <% if (req.service_type === 'gcash') { %>
+                              <label class="form-label small fw-bold">Reference Number (Optional)</label>
+                              <div class="input-group shadow-sm mb-2">
+                                <input class="form-control form-control-sm border-0" name="referenceNumber" placeholder="Enter Ref # if any">
+                              </div>
+                            <% } %>
+                            <button class="btn btn-sm btn-success w-100 fw-bold">CONFIRM FULFILLMENT</button>
+                            <div class="mini-note mt-2 text-center text-secondary">Verify transaction before saving.</div>
+                          </form>
+                        </div>
+                      </div>
+                    <% }) %>
+                  <% } %>
+                </div>
+              </div>
+            </div>
+
+            <!-- Recent History Section -->
+            <div class="col-lg-6">
+              <div class="content-card p-4 h-100">
+                <div class="mb-4">
+                  <div class="section-title">Recent Requests</div>
+                  <div class="mini-note">History of processed transactions.</div>
+                </div>
+
+                <div class="vstack gap-3">
+                  <% const recent = requests.filter(r => r.status !== 'Pending').reverse().slice(0, 10); %>
+                  <% if (!recent.length) { %>
+                    <div class="text-center py-5 opacity-50">
+                      <div class="fw-bold text-muted">No history yet</div>
                     </div>
-                  </div>
-                <% }) %>
-              <% } %>
+                  <% } else { %>
+                    <% recent.forEach(req => { %>
+                      <div class="p-3 bg-light rounded-4 border-start border-4 <%= req.status === 'Completed' ? 'border-success' : 'border-danger' %>">
+                        <div class="d-flex justify-content-between align-items-center">
+                          <div>
+                            <div class="fw-bold"><%= req.mobile_number %></div>
+                            <div class="mini-note text-muted"><%= req.service_type.toUpperCase() %> | <%= req.status %></div>
+                          </div>
+                          <div class="text-end">
+                            <div class="fw-bold">₱<%= req.amount.toLocaleString() %></div>
+                            <div class="small text-muted"><%= req.request_code %></div>
+                          </div>
+                        </div>
+                      </div>
+                    <% }) %>
+                  <% } %>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-
       </div>
     </section>
   </main>
