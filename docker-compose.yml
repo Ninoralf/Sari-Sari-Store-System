@@ -1,0 +1,7 @@
+services:
+  sari-sari-store:
+    build: .
+    container_name: sari-sari-store
+    restart: unless-stopped
+    ports:
+      - "3005:3000"
