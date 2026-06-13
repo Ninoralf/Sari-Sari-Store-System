@@ -88,6 +88,20 @@ function deriveLegacyStatus(stockQuantity, reorderLevel) {
   return "In Stock";
 }
 
+const defaultEloadNetworks = {
+  TM: ["EZ50", "ASTIG99", "ALLNET20", "EASYSURF50"],
+  GLOBE: ["GO59", "GO+99", "GOUNLI129", "SURF4ALL99"],
+  SMART: ["ALL DATA 50", "MAGICSARAP99", "POWER ALL 99", "GIGA VIDEO 99"],
+  TNT: ["TNT PANALO 30", "SURFSAYA 50", "ALL DATA 99", "SAYA ALL 99"],
+  SUN: ["CTC50", "TU200", "SURF50", "UNLI TXT 50"],
+  DITO: ["DITO 10", "DITO 50", "LEVEL-UP 99", "UNLI 5G 149"]
+};
+
+function parsePromoSellingPrice(promoName) {
+  const matches = String(promoName || "").match(/(\d+(?:\.\d+)?)/g);
+  return matches ? Number(matches[matches.length - 1]) : 0;
+}
+
 function createSchema() {
   db.exec(`
     PRAGMA foreign_keys = ON;
@@ -239,6 +253,20 @@ function createSchema() {
       category_name TEXT NOT NULL UNIQUE,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS eload_networks (
+      network_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      network_name TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS eload_promos (
+      promo_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      network_id INTEGER NOT NULL,
+      promo_name TEXT NOT NULL,
+      selling_price REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(network_id, promo_name),
+      FOREIGN KEY (network_id) REFERENCES eload_networks(network_id) ON DELETE CASCADE
+    );
   `);
 }
 
@@ -323,6 +351,25 @@ function seedCategoriesFromInventory() {
     categoryNames.forEach((name) => insertCategory.run(name));
   });
   insertMany(names);
+}
+
+function seedEloadSettings() {
+  const existingCount = db.prepare("SELECT COUNT(*) AS count FROM eload_networks").get().count;
+  if (existingCount) return;
+
+  const insertNetwork = db.prepare("INSERT INTO eload_networks (network_name) VALUES (?)");
+  const insertPromo = db.prepare("INSERT INTO eload_promos (network_id, promo_name, selling_price) VALUES (?, ?, ?)");
+  const insertDefaults = withTransaction(() => {
+    Object.entries(defaultEloadNetworks).forEach(([networkName, promos]) => {
+      const result = insertNetwork.run(networkName);
+      const networkId = Number(result.lastInsertRowid);
+      promos.forEach((promoName) => {
+        insertPromo.run(networkId, promoName, parsePromoSellingPrice(promoName));
+      });
+    });
+  });
+
+  insertDefaults();
 }
 
 function syncDigitalRequestLogs() {
@@ -816,6 +863,7 @@ export function initializeDatabase() {
   seedMissingInventoryItems();
   seedSuppliersFromInventory();
   seedCategoriesFromInventory();
+  seedEloadSettings();
   backfillLogTablesFromSales();
   syncDigitalRequestLogs();
 }
@@ -934,6 +982,73 @@ export function deleteCategory(categoryId) {
   if (usageCount > 0) throw new Error("This category is used by inventory items and cannot be deleted.");
 
   db.prepare("DELETE FROM categories WHERE category_id = ?").run(categoryId);
+}
+
+export function listEloadNetworks() {
+  const networks = db.prepare(`
+    SELECT network_id, network_name
+    FROM eload_networks
+    ORDER BY network_name COLLATE NOCASE, network_id
+  `).all();
+  const promos = db.prepare(`
+    SELECT promo_id, network_id, promo_name, selling_price
+    FROM eload_promos
+    ORDER BY promo_name COLLATE NOCASE, promo_id
+  `).all();
+  const promosByNetwork = new Map();
+  promos.forEach((promo) => {
+    const networkPromos = promosByNetwork.get(promo.network_id) || [];
+    networkPromos.push({ ...promo, selling_price: Number(promo.selling_price || 0) });
+    promosByNetwork.set(promo.network_id, networkPromos);
+  });
+  return networks.map((network) => ({
+    ...network,
+    promos: promosByNetwork.get(network.network_id) || []
+  }));
+}
+
+export function getEloadPromoCatalog() {
+  return listEloadNetworks().reduce((catalog, network) => {
+    catalog[network.network_name] = network.promos.map((promo) => ({
+      name: promo.promo_name,
+      price: Number(promo.selling_price || 0)
+    }));
+    return catalog;
+  }, {});
+}
+
+export function createEloadNetwork(input) {
+  const networkName = String(input.networkName || "").trim().toUpperCase();
+  if (!networkName) throw new Error("Network name is required.");
+  if (db.prepare("SELECT 1 FROM eload_networks WHERE lower(network_name) = lower(?)").get(networkName)) {
+    throw new Error("Network already exists.");
+  }
+  db.prepare("INSERT INTO eload_networks (network_name) VALUES (?)").run(networkName);
+}
+
+export function deleteEloadNetwork(networkId) {
+  const network = db.prepare("SELECT network_id FROM eload_networks WHERE network_id = ?").get(networkId);
+  if (!network) throw new Error("Network not found.");
+  db.prepare("DELETE FROM eload_networks WHERE network_id = ?").run(networkId);
+}
+
+export function createEloadPromo(input) {
+  const networkId = Number(input.networkId);
+  const promoName = String(input.promoName || "").trim();
+  const sellingPrice = Number(input.sellingPrice || 0);
+  if (!db.prepare("SELECT 1 FROM eload_networks WHERE network_id = ?").get(networkId)) {
+    throw new Error("Network not found.");
+  }
+  if (!promoName) throw new Error("Promo name is required.");
+  if (sellingPrice <= 0) throw new Error("Selling price must be greater than zero.");
+  db.prepare("INSERT INTO eload_promos (network_id, promo_name, selling_price) VALUES (?, ?, ?)")
+    .run(networkId, promoName, sellingPrice);
+}
+
+export function deleteEloadPromo(promoId) {
+  const promo = db.prepare("SELECT promo_id FROM eload_promos WHERE promo_id = ?").get(promoId);
+  if (!promo) throw new Error("Promo not found.");
+  db.prepare("DELETE FROM eload_promos WHERE promo_id = ?").run(promoId);
 }
 
 export function getStoreSettings() {
@@ -1446,6 +1561,8 @@ export function resetAllData() {
     DELETE FROM sale_items;
     DELETE FROM sales;
     DELETE FROM inventory_items;
+    DELETE FROM eload_promos;
+    DELETE FROM eload_networks;
     DELETE FROM suppliers;
     DELETE FROM categories;
     DELETE FROM store_settings;
@@ -1455,4 +1572,5 @@ export function resetAllData() {
   seedDefaults();
   seedSuppliersFromInventory();
   seedCategoriesFromInventory();
+  seedEloadSettings();
 }

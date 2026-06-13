@@ -17,6 +17,7 @@
         <% if (user && user.role === "Admin") { %>
           <li class="nav-item"><button class="nav-link <%= activeTab === 'categories' ? 'active' : '' %>" data-bs-toggle="tab" data-bs-target="#categories-tab" type="button">Categories</button></li>
           <li class="nav-item"><button class="nav-link <%= activeTab === 'suppliers' ? 'active' : '' %>" data-bs-toggle="tab" data-bs-target="#suppliers-tab" type="button">Suppliers</button></li>
+          <li class="nav-item"><button class="nav-link <%= activeTab === 'eload' ? 'active' : '' %>" data-bs-toggle="tab" data-bs-target="#eload-tab" type="button">eLoad</button></li>
           <li class="nav-item"><button class="nav-link <%= activeTab === 'data' ? 'active' : '' %>" data-bs-toggle="tab" data-bs-target="#data-tab" type="button">Data</button></li>
         <% } %>
       </ul>
@@ -321,6 +322,69 @@
             </div>
           </div>
         </div>
+        <div class="tab-pane fade <%= activeTab === 'eload' ? 'show active' : '' %>" id="eload-tab">
+          <div class="content-card p-4 mb-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+              <div>
+                <div class="section-title">eLoad Networks</div>
+                <div class="mini-note">Manage networks and the promo list shown in the eLoad request tab.</div>
+              </div>
+              <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addEloadNetworkModal"><i class="bi bi-plus-lg me-2"></i>Add Network</button>
+            </div>
+            <% if (!eloadNetworks.length) { %>
+              <div class="text-center py-4 mini-note">No eLoad networks added yet.</div>
+            <% } else { %>
+              <div class="vstack gap-3">
+                <% eloadNetworks.forEach((network) => { %>
+                  <div class="border rounded-4 p-3">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                      <div>
+                        <div class="fw-bold fs-5"><%= network.network_name %></div>
+                        <div class="mini-note"><%= network.promos.length %> promo<%= network.promos.length === 1 ? '' : 's' %></div>
+                      </div>
+                      <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#addEloadPromoModal-<%= network.network_id %>"><i class="bi bi-plus-lg me-1"></i>Add Promo</button>
+                        <form method="post" action="/settings/eload/networks/<%= network.network_id %>/delete" onsubmit="return confirm('Delete this network and all of its promos?');">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                          <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                        </form>
+                      </div>
+                    </div>
+                    <div class="table-responsive">
+                      <table class="table align-middle mb-0">
+                        <thead>
+                          <tr>
+                            <th>Promo Name</th>
+                            <th class="text-end">Selling Price</th>
+                            <th class="text-end">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <% if (!network.promos.length) { %>
+                            <tr><td colspan="3" class="text-center py-3 mini-note">No promos added for this network.</td></tr>
+                          <% } else { %>
+                            <% network.promos.forEach((promo) => { %>
+                              <tr>
+                                <td class="fw-semibold"><%= promo.promo_name %></td>
+                                <td class="text-end">₱<%= Number(promo.selling_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></td>
+                                <td class="text-end">
+                                  <form method="post" action="/settings/eload/promos/<%= promo.promo_id %>/delete" onsubmit="return confirm('Delete this promo?');">
+                                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                    <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                                  </form>
+                                </td>
+                              </tr>
+                            <% }) %>
+                          <% } %>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+          </div>
+        </div>
         <div class="tab-pane fade <%= activeTab === 'data' ? 'show active' : '' %>" id="data-tab">
           <div class="content-card p-4">
             <div class="section-title mb-3">Data Management</div>
@@ -402,6 +466,41 @@
             </div>
           </div>
           <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-success">Update Supplier</button></div>
+        </form>
+      </div>
+    </div>
+  </div>
+<% }) %>
+<div class="modal fade" id="addEloadNetworkModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="/settings/eload/networks/add">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="modal-header"><h5 class="modal-title">Add eLoad Network</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <label class="form-label">Network Name</label>
+          <input class="form-control text-uppercase" name="networkName" placeholder="e.g. SNT" required>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-success">Save Network</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+<% eloadNetworks.forEach((network) => { %>
+  <div class="modal fade" id="addEloadPromoModal-<%= network.network_id %>" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <form method="post" action="/settings/eload/promos/add">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="networkId" value="<%= network.network_id %>">
+          <div class="modal-header"><h5 class="modal-title">Add Promo for <%= network.network_name %></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body">
+            <div class="row g-3">
+              <div class="col-md-7"><label class="form-label">Promo Name</label><input class="form-control" name="promoName" placeholder="e.g. SNT30" required></div>
+              <div class="col-md-5"><label class="form-label">Selling Price</label><input class="form-control" name="sellingPrice" type="number" min="1" step="0.01" placeholder="0.00" required></div>
+            </div>
+          </div>
+          <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-success">Save Promo</button></div>
         </form>
       </div>
     </div>

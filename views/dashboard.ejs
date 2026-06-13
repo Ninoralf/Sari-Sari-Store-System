@@ -5,12 +5,12 @@
     <%- include("partials/topbar") %>
     <section class="p-3 p-lg-4">
       <%- include("partials/flash") %>
-      <div class="row g-4 mb-4 dashboard-metrics-grid">
-        <div class="col-md-6 col-xl-4"><a class="metric-card metric-card-link dashboard-metric-card p-4 h-100 d-block text-reset text-decoration-none" href="/inventory"><div class="dashboard-metric-body d-flex justify-content-between"><div class="dashboard-metric-copy"><div class="mini-note dashboard-metric-label">Total Products</div><div class="dashboard-metric-value display-6 fw-bold" id="dashboardMetricTotalProducts"><%= metrics.totalProducts %></div><div class="mini-note dashboard-metric-note">Current inventory records</div></div><div class="stat-icon blue"><i class="bi bi-box-seam fs-4"></i></div></div></a></div>
-        <div class="col-md-6 col-xl-4"><a class="metric-card metric-card-link dashboard-metric-card p-4 h-100 d-block text-reset text-decoration-none" href="/inventory?status=Low%20Stock"><div class="dashboard-metric-body d-flex justify-content-between"><div class="dashboard-metric-copy"><div class="mini-note dashboard-metric-label">Low Stock Items</div><div class="dashboard-metric-value display-6 fw-bold text-warning" id="dashboardMetricLowStock"><%= metrics.lowStockItems %></div><div class="mini-note dashboard-metric-note">Need attention soon</div></div><div class="stat-icon yellow"><i class="bi bi-exclamation-triangle fs-4"></i></div></div></a></div>
-        <div class="col-md-6 col-xl-4"><a class="metric-card metric-card-link dashboard-metric-card p-4 h-100 d-block text-reset text-decoration-none" href="/inventory?status=Out%20of%20Stock"><div class="dashboard-metric-body d-flex justify-content-between"><div class="dashboard-metric-copy"><div class="mini-note dashboard-metric-label">Out of Stock</div><div class="dashboard-metric-value display-6 fw-bold text-danger" id="dashboardMetricOutOfStock"><%= metrics.outOfStockItems %></div><div class="mini-note dashboard-metric-note">Reorder immediately</div></div><div class="stat-icon red"><i class="bi bi-x-octagon fs-4"></i></div></div></a></div>
-        <div class="col-md-6 col-xl-4"><div class="metric-card dashboard-metric-card p-4 h-100"><div class="dashboard-metric-body d-flex justify-content-between"><div class="dashboard-metric-copy"><div class="mini-note dashboard-metric-label">Daily Sales</div><div class="dashboard-metric-value h2 fw-bold" id="dashboardMetricDailySales"><%= formatCurrency(metrics.dailySales) %></div><div class="mini-note dashboard-metric-note">As of <%= currentDateLabel %></div></div><div class="stat-icon green"><i class="bi bi-cash-stack fs-4"></i></div></div></div></div>
-        <div class="col-md-6 col-xl-4"><div class="metric-card dashboard-metric-card p-4 h-100"><div class="dashboard-metric-body d-flex justify-content-between"><div class="dashboard-metric-copy"><div class="mini-note dashboard-metric-label">Monthly Sales</div><div class="dashboard-metric-value h2 fw-bold" id="dashboardMetricMonthlySales"><%= formatCurrency(metrics.monthlySales) %></div><div class="mini-note dashboard-metric-note">Rolling 30-day revenue</div><div class="dashboard-metric-breakdown mt-2 small"><div class="fw-semibold text-warning" id="dashboardMetricMonthlyProductsTotal"></div><div class="fw-semibold text-success" id="dashboardMetricMonthlyLoadTotal"></div><div class="fw-semibold text-primary" id="dashboardMetricMonthlyGcashTotal"></div></div></div><div class="stat-icon cyan"><i class="bi bi-graph-up-arrow fs-4"></i></div></div></div></div>
+      <div class="row g-3 mb-4 dashboard-metrics-grid">
+        <div class="col-md-6 col-xl-4"><a class="content-card p-3 border-start border-4 border-primary h-100 d-block text-reset text-decoration-none" href="/inventory"><div class="mini-note text-uppercase fw-bold">Total Products</div><div class="h2 mb-0 fw-bold" id="dashboardMetricTotalProducts"><%= metrics.totalProducts %></div><div class="mini-note text-muted">Current inventory records</div></a></div>
+        <div class="col-md-6 col-xl-4"><a class="content-card p-3 border-start border-4 border-warning h-100 d-block text-reset text-decoration-none" href="/inventory?status=Low%20Stock"><div class="mini-note text-uppercase fw-bold">Low Stock Items</div><div class="h2 mb-0 fw-bold text-warning" id="dashboardMetricLowStock"><%= metrics.lowStockItems %></div><div class="mini-note text-muted">Need attention soon</div></a></div>
+        <div class="col-md-6 col-xl-4"><a class="content-card p-3 border-start border-4 border-danger h-100 d-block text-reset text-decoration-none" href="/inventory?status=Out%20of%20Stock"><div class="mini-note text-uppercase fw-bold">Out of Stock</div><div class="h2 mb-0 fw-bold text-danger" id="dashboardMetricOutOfStock"><%= metrics.outOfStockItems %></div><div class="mini-note text-muted">Reorder immediately</div></a></div>
+        <div class="col-md-6 col-xl-4"><div class="content-card p-3 border-start border-4 border-success h-100"><div class="mini-note text-uppercase fw-bold">Daily Sales</div><div class="h2 mb-0 fw-bold text-success" id="dashboardMetricDailySales"><%= formatCurrency(metrics.dailySales) %></div><div class="mini-note text-muted">As of <%= currentDateLabel %></div></div></div>
+        <div class="col-md-6 col-xl-4"><div class="content-card p-3 border-start border-4 border-info h-100"><div class="mini-note text-uppercase fw-bold">Monthly Sales</div><div class="h2 mb-0 fw-bold text-primary" id="dashboardMetricMonthlySales"><%= formatCurrency(metrics.monthlySales) %></div><div class="mini-note text-muted">Rolling 30-day revenue</div><div class="dashboard-metric-breakdown mt-2 small"><div class="fw-semibold text-warning" id="dashboardMetricMonthlyProductsTotal"></div><div class="fw-semibold text-success" id="dashboardMetricMonthlyLoadTotal"></div><div class="fw-semibold text-primary" id="dashboardMetricMonthlyGcashTotal"></div></div></div></div>
       </div>
       <div class="row g-4 mb-4">
         <div class="col-12">
@@ -33,8 +33,8 @@
           <div class="content-card p-4 h-100">
             <div class="section-title mb-3"><i class="bi bi-trophy text-warning me-2"></i>Best Selling Item This Month</div>
             <% if (bestSellingItem) { %>
-              <div class="top-item-card rounded-4 p-4 d-flex gap-3 align-items-center" id="dashboardBestSellingCard">
-                <div class="icon-chip"><i class="bi bi-award fs-4"></i></div>
+              <div class="bg-light rounded-3 p-3 d-flex gap-3 align-items-center border-start border-4 border-warning" id="dashboardBestSellingCard">
+                <div class="btn btn-sm btn-light rounded-circle shadow-sm"><i class="bi bi-award text-warning"></i></div>
                 <div><div class="fw-bold fs-5"><%= bestSellingItem.name %></div><div class="mini-note"><%= bestSellingItem.quantity_sold %> units sold</div><div class="text-success fw-semibold"><%= formatCurrency(bestSellingItem.revenue) %> revenue</div></div>
               </div>
             <% } %>
@@ -45,7 +45,7 @@
             <div class="section-title mb-3 text-warning"><i class="bi bi-exclamation-triangle me-2"></i>Low Stock Alert</div>
             <div class="vstack gap-3" id="dashboardLowStockList">
               <% lowStockItems.forEach((item) => { %>
-                <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-4 p-3 text-reset text-decoration-none" href="/inventory?status=<%= encodeURIComponent(item.status) %>&search=<%= encodeURIComponent(item.name) %>" style="background: rgba(245, 158, 11, 0.08);">
+                <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-3 p-3 bg-light text-reset text-decoration-none border-start border-4 border-warning" href="/inventory?status=<%= encodeURIComponent(item.status) %>&search=<%= encodeURIComponent(item.name) %>">
                   <div><div class="fw-semibold"><%= item.name %></div><div class="mini-note"><%= item.category %></div></div>
                   <div class="text-end"><div class="fw-bold <%= item.status === 'Out of Stock' ? 'text-danger' : 'text-warning' %>"><%= item.status %></div><div class="mini-note">Manual stock check</div></div>
                 </a>
@@ -59,14 +59,14 @@
           <div class="content-card p-4 h-100">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
               <div class="section-title text-success mb-0"><i class="bi bi-phone me-2"></i>Pending Eload Requests</div>
-              <a class="btn btn-sm btn-outline-success" href="/eload">Open Eload Queue</a>
+              <a class="btn btn-outline-success btn-sm rounded-pill px-3" href="/eload">Open Eload Queue</a>
             </div>
             <div class="vstack gap-3" id="dashboardPendingEloadList">
               <% if (!pendingEloadRequests.length) { %>
                 <div class="mini-note text-center py-4">No pending eload requests right now.</div>
               <% } else { %>
                 <% pendingEloadRequests.forEach((request) => { %>
-                  <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-4 p-3 text-reset text-decoration-none" href="/eload" style="background: rgba(34, 197, 94, 0.08);">
+                  <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-3 p-3 bg-light text-reset text-decoration-none border-start border-4 border-success" href="/eload">
                     <div>
                       <div class="fw-semibold"><%= request.request_code %> | <%= request.mobile_number %></div>
                       <div class="mini-note"><%= request.network || "No network" %> | <%= request.load_value || request.load_type || "Pending load selection" %></div>
@@ -85,14 +85,14 @@
           <div class="content-card p-4 h-100">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
               <div class="section-title text-primary mb-0"><i class="bi bi-wallet2 me-2"></i>Pending GCash Requests</div>
-              <a class="btn btn-sm btn-outline-primary" href="/eload">Open GCash Queue</a>
+              <a class="btn btn-outline-primary btn-sm rounded-pill px-3" href="/eload">Open GCash Queue</a>
             </div>
             <div class="vstack gap-3" id="dashboardPendingGcashList">
               <% if (!pendingGcashRequests.length) { %>
                 <div class="mini-note text-center py-4">No pending GCash requests right now.</div>
               <% } else { %>
                 <% pendingGcashRequests.forEach((request) => { %>
-                  <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-4 p-3 text-reset text-decoration-none" href="/eload" style="background: rgba(59, 130, 246, 0.08);">
+                  <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-3 p-3 bg-light text-reset text-decoration-none border-start border-4 border-primary" href="/eload">
                     <div>
                       <div class="fw-semibold"><%= request.request_code %> | <%= request.mobile_number %></div>
                       <div class="mini-note"><%= request.request_kind || "GCash request" %> | <%= request.reference_no || "Reference pending" %></div>
@@ -208,14 +208,14 @@
 
       if (payload.bestSellingItem && dashboardBestSellingCard) {
         dashboardBestSellingCard.innerHTML = `
-          <div class="icon-chip"><i class="bi bi-award fs-4"></i></div>
+          <div class="btn btn-sm btn-light rounded-circle shadow-sm"><i class="bi bi-award text-warning"></i></div>
           <div><div class="fw-bold fs-5">${payload.bestSellingItem.name}</div><div class="mini-note">${payload.bestSellingItem.quantity_sold} units sold</div><div class="text-success fw-semibold">${new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(payload.bestSellingItem.revenue)} revenue</div></div>
         `;
       }
 
       if (dashboardLowStockList) {
         dashboardLowStockList.innerHTML = payload.lowStockItems.map((item) => `
-          <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-4 p-3 text-reset text-decoration-none" href="/inventory?status=${encodeURIComponent(item.status)}&search=${encodeURIComponent(item.name)}" style="background: rgba(245, 158, 11, 0.08);">
+          <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-3 p-3 bg-light text-reset text-decoration-none border-start border-4 border-warning" href="/inventory?status=${encodeURIComponent(item.status)}&search=${encodeURIComponent(item.name)}">
             <div><div class="fw-semibold">${item.name}</div><div class="mini-note">${item.category}</div></div>
             <div class="text-end"><div class="fw-bold ${item.status === "Out of Stock" ? "text-danger" : "text-warning"}">${item.status}</div><div class="mini-note">Manual stock check</div></div>
           </a>
@@ -225,7 +225,7 @@
       if (dashboardPendingEloadList) {
         dashboardPendingEloadList.innerHTML = payload.pendingEloadRequests.length
           ? payload.pendingEloadRequests.map((request) => `
-            <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-4 p-3 text-reset text-decoration-none" href="/eload" style="background: rgba(34, 197, 94, 0.08);">
+            <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-3 p-3 bg-light text-reset text-decoration-none border-start border-4 border-success" href="/eload">
               <div>
                 <div class="fw-semibold">${escapeHtml(request.request_code)} | ${escapeHtml(request.mobile_number)}</div>
                 <div class="mini-note">${escapeHtml(request.network || "No network")} | ${escapeHtml(request.load_value || request.load_type || "Pending load selection")}</div>
@@ -242,7 +242,7 @@
       if (dashboardPendingGcashList) {
         dashboardPendingGcashList.innerHTML = payload.pendingGcashRequests.length
           ? payload.pendingGcashRequests.map((request) => `
-            <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-4 p-3 text-reset text-decoration-none" href="/eload" style="background: rgba(59, 130, 246, 0.08);">
+            <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-3 p-3 bg-light text-reset text-decoration-none border-start border-4 border-primary" href="/eload">
               <div>
                 <div class="fw-semibold">${escapeHtml(request.request_code)} | ${escapeHtml(request.mobile_number)}</div>
                 <div class="mini-note">${escapeHtml(request.request_kind || "GCash request")} | ${escapeHtml(request.reference_no || "Reference pending")}</div>

@@ -7,12 +7,16 @@ import {
   addInventoryItem,
   completeDigitalServiceRequest,
   createCategory,
+  createEloadNetwork,
+  createEloadPromo,
   createUserAccount,
   createSupplier,
   createDigitalServiceRequest,
   createSale,
   deleteInventoryItem,
   deleteCategory,
+  deleteEloadNetwork,
+  deleteEloadPromo,
   failDigitalServiceRequest,
   exportInventoryCsv,
   exportSalesCsv,
@@ -24,11 +28,13 @@ import {
   getReportsData,
   getSalesMetrics,
   getStoreSettings,
+  getEloadPromoCatalog,
   listDigitalServiceRequests,
   getUserById,
   getUserByUsername,
   initializeDatabase,
   listCategories,
+  listEloadNetworks,
   listUsers,
   listInventory,
   listSuppliers,
@@ -555,6 +561,7 @@ app.get("/eload", requireAuth, (req, res) => {
     pageTitle: "Eload",
     todayLabel: todayLabel(),
     requests,
+    eloadPromoCatalog: getEloadPromoCatalog(),
     requestsFingerprint: buildDigitalRequestsFingerprint(requests),
     formatCurrency,
     formatDateTime
@@ -753,7 +760,7 @@ app.get("/settings", requireAuth, (req, res) => {
   const currentUser = getUserById(req.session.user.id);
   const isAdmin = currentUser?.role === "Admin";
   const allowedTabs = isAdmin
-    ? new Set(["store", "profile", "notifications", "appearance", "categories", "suppliers", "data"])
+    ? new Set(["store", "profile", "notifications", "appearance", "categories", "suppliers", "eload", "data"])
     : new Set(["profile", "appearance"]);
   const activeTab = allowedTabs.has(requestedTab) ? requestedTab : (isAdmin ? "store" : "profile");
 
@@ -764,6 +771,7 @@ app.get("/settings", requireAuth, (req, res) => {
     userProfile: currentUser,
     categories: isAdmin ? listCategories() : [],
     suppliers: isAdmin ? listSuppliers() : [],
+    eloadNetworks: isAdmin ? listEloadNetworks() : [],
     activeTab
   });
 });
@@ -977,6 +985,46 @@ app.post("/settings/suppliers/:id/delete", requireAuth, requireAdmin, (req, res)
     setFlash(req, "danger", error.message);
   }
   res.redirect("/settings?tab=suppliers");
+});
+
+app.post("/settings/eload/networks/add", requireAuth, requireAdmin, (req, res) => {
+  try {
+    createEloadNetwork(req.body);
+    setFlash(req, "success", "eLoad network added.");
+  } catch (error) {
+    setFlash(req, "danger", error.message);
+  }
+  res.redirect("/settings?tab=eload");
+});
+
+app.post("/settings/eload/networks/:id/delete", requireAuth, requireAdmin, (req, res) => {
+  try {
+    deleteEloadNetwork(Number(req.params.id));
+    setFlash(req, "success", "eLoad network deleted.");
+  } catch (error) {
+    setFlash(req, "danger", error.message);
+  }
+  res.redirect("/settings?tab=eload");
+});
+
+app.post("/settings/eload/promos/add", requireAuth, requireAdmin, (req, res) => {
+  try {
+    createEloadPromo(req.body);
+    setFlash(req, "success", "eLoad promo added.");
+  } catch (error) {
+    setFlash(req, "danger", error.message);
+  }
+  res.redirect("/settings?tab=eload");
+});
+
+app.post("/settings/eload/promos/:id/delete", requireAuth, requireAdmin, (req, res) => {
+  try {
+    deleteEloadPromo(Number(req.params.id));
+    setFlash(req, "success", "eLoad promo deleted.");
+  } catch (error) {
+    setFlash(req, "danger", error.message);
+  }
+  res.redirect("/settings?tab=eload");
 });
 
 app.get("/settings/export/inventory.csv", requireAuth, requireAdmin, (req, res) => {

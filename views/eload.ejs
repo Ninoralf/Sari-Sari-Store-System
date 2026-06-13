@@ -136,11 +136,27 @@
                       <span class="badge rounded-circle bg-dark text-white d-inline-flex align-items-center justify-content-center" style="width: 28px; height: 28px;">2</span>
                       <span class="fw-bold text-uppercase small">Choose Transaction Flow</span>
                     </div>
-                    <div class="d-flex gap-2 p-1 bg-light rounded-pill">
+                    <div class="row g-2">
                       <input class="btn-check" type="radio" name="cashFlow" id="flowIn" value="Cash In" checked>
-                      <label class="btn btn-white btn-sm flex-grow-1 rounded-pill border-0 py-2 shadow-sm" for="flowIn">CASH IN</label>
+                      <div class="col-6">
+                        <label class="gcash-flow-option gcash-flow-in h-100" for="flowIn">
+                          <span class="gcash-flow-icon"><i class="bi bi-arrow-down-circle"></i></span>
+                          <span>
+                            <span class="gcash-flow-title">Cash In</span>
+                            <span class="gcash-flow-note">Receive money</span>
+                          </span>
+                        </label>
+                      </div>
                       <input class="btn-check" type="radio" name="cashFlow" id="flowOut" value="Cash Out">
-                      <label class="btn btn-white btn-sm flex-grow-1 rounded-pill border-0 py-2 shadow-sm" for="flowOut">CASH OUT</label>
+                      <div class="col-6">
+                        <label class="gcash-flow-option gcash-flow-out h-100" for="flowOut">
+                          <span class="gcash-flow-icon"><i class="bi bi-arrow-up-circle"></i></span>
+                          <span>
+                            <span class="gcash-flow-title">Cash Out</span>
+                            <span class="gcash-flow-note">Release money</span>
+                          </span>
+                        </label>
+                      </div>
                     </div>
                   </div>
 
@@ -274,7 +290,20 @@
                 </div>
 
                 <div class="vstack gap-3">
-                  <% const recent = requests.filter(r => r.status !== 'Pending').reverse().slice(0, 10); %>
+                  <%
+                    const todayKey = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+                    const recent = requests
+                      .filter((r) => {
+                        if (r.status === "Pending") return false;
+                        const resolvedAt = r.status === "Completed" ? r.completed_at : r.failed_at;
+                        if (!resolvedAt) return false;
+                        const resolvedDate = new Date(`${String(resolvedAt).replace(" ", "T")}Z`);
+                        const resolvedKey = resolvedDate.toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+                        return resolvedKey === todayKey;
+                      })
+                      .reverse()
+                      .slice(0, 10);
+                  %>
                   <% if (!recent.length) { %>
                     <div class="text-center py-5 opacity-50">
                       <div class="fw-bold text-muted">No history yet</div>
@@ -331,14 +360,7 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  const networkPromos = {
-    TM: ["EZ50", "ASTIG99", "ALLNET20", "EASYSURF50"],
-    GLOBE: ["GO59", "GO+99", "GOUNLI129", "SURF4ALL99"],
-    SMART: ["ALL DATA 50", "MAGICSARAP99", "POWER ALL 99", "GIGA VIDEO 99"],
-    TNT: ["TNT PANALO 30", "SURFSAYA 50", "ALL DATA 99", "SAYA ALL 99"],
-    SUN: ["CTC50", "TU200", "SURF50", "UNLI TXT 50"],
-    DITO: ["DITO 10", "DITO 50", "LEVEL-UP 99", "UNLI 5G 149"]
-  };
+  const networkPromos = <%- JSON.stringify(eloadPromoCatalog || {}) %>;
 
   const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
   const eloadForm = document.getElementById("eloadForm");
@@ -375,6 +397,20 @@
     return m ? Number(m[m.length-1]) : 0;
   }
 
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function getSelectedPromo() {
+    if (!selectedNetwork) return null;
+    return (networkPromos[selectedNetwork] || []).find((promo) => promo.name === eloadPromoSelect.value) || null;
+  }
+
   function renderNetworks() {
     eloadNetworkGrid.innerHTML = Object.keys(networkPromos).map(net => `
       <div class="col-4 col-md-2">
@@ -392,7 +428,7 @@
 
     if (type === "promo") {
       val = eloadPromoSelect.value;
-      amt = parseAmount(val);
+      amt = Number(getSelectedPromo()?.price || parseAmount(val));
     } else {
       amt = Number(eloadRegularAmount.value || 0);
       val = amt ? `Regular ${amt}` : "";
@@ -414,7 +450,7 @@
     renderNetworks();
     
     eloadPromoSelect.disabled = false;
-    eloadPromoSelect.innerHTML = `<option value="">Select Promo</option>` + networkPromos[selectedNetwork].map(p => `<option value="${p}">${p}</option>`).join("");
+    eloadPromoSelect.innerHTML = `<option value="">Select Promo</option>` + (networkPromos[selectedNetwork] || []).map((p) => `<option value="${escapeHtml(p.name)}">${escapeHtml(p.name)} - ${peso.format(Number(p.price || 0))}</option>`).join("");
     updateEloadValues();
   });
 

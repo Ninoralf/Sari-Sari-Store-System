@@ -1304,6 +1304,89 @@ body[data-theme="Dark Mode"] .btn-check:checked + .btn.eload-btn-ghost {
   color: #ffffff;
 }
 
+.gcash-flow-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 5.25rem;
+  padding: 0.9rem;
+  border: 1px solid var(--input-border);
+  border-radius: 0.75rem;
+  background: var(--input-bg);
+  color: var(--text-strong);
+  cursor: pointer;
+  box-shadow: 0 0.45rem 1rem rgba(15, 23, 42, 0.07);
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.gcash-flow-option:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0.6rem 1.25rem rgba(15, 23, 42, 0.1);
+}
+
+.gcash-flow-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 2.45rem;
+  width: 2.45rem;
+  height: 2.45rem;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  font-size: 1.25rem;
+}
+
+.gcash-flow-title,
+.gcash-flow-note {
+  display: block;
+  line-height: 1.15;
+}
+
+.gcash-flow-title {
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 0.86rem;
+}
+
+.gcash-flow-note {
+  margin-top: 0.22rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.gcash-flow-in .gcash-flow-icon {
+  color: #16a34a;
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.gcash-flow-out .gcash-flow-icon {
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+#flowIn:checked + .col-6 .gcash-flow-option {
+  border-color: #16a34a;
+  background: rgba(34, 197, 94, 0.12);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.16), 0 0.6rem 1.25rem rgba(22, 163, 74, 0.14);
+}
+
+#flowOut:checked + .col-6 .gcash-flow-option {
+  border-color: #dc2626;
+  background: rgba(239, 68, 68, 0.12);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.16), 0 0.6rem 1.25rem rgba(220, 38, 38, 0.14);
+}
+
+#flowIn:checked + .col-6 .gcash-flow-title,
+#flowIn:checked + .col-6 .gcash-flow-icon {
+  color: #15803d;
+}
+
+#flowOut:checked + .col-6 .gcash-flow-title,
+#flowOut:checked + .col-6 .gcash-flow-icon {
+  color: #b91c1c;
+}
+
 .eload-service-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -2086,6 +2169,14 @@ body[data-font-size] .mini-note { font-size: 0.85em; }
   border-color: var(--brand-emerald);
   color: white;
   box-shadow: 0 0.5rem 1rem color-mix(in srgb, var(--brand-emerald) 25%, transparent);
+}
+.product-grid-container {
+  overflow-x: hidden !important;
+  overflow-y: auto;
+}
+.product-grid-container > .row {
+  margin-right: 0;
+  margin-left: 0;
 }
 .product-card {
   background: var(--surface-card);
