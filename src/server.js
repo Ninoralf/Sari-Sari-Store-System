@@ -44,6 +44,7 @@ import {
   updateUserAccount,
   updateUserPin,
   updateCategory,
+  updateEloadPromo,
   updateInventoryItem,
   updateNotifications,
   updatePassword,
@@ -1011,6 +1012,16 @@ app.post("/settings/eload/promos/add", requireAuth, requireAdmin, (req, res) => 
   try {
     createEloadPromo(req.body);
     setFlash(req, "success", "eLoad promo added.");
+  } catch (error) {
+    setFlash(req, "danger", error.message);
+  }
+  res.redirect("/settings?tab=eload");
+});
+
+app.post("/settings/eload/promos/:id/update", requireAuth, requireAdmin, (req, res) => {
+  try {
+    updateEloadPromo(Number(req.params.id), req.body);
+    setFlash(req, "success", "eLoad promo updated.");
   } catch (error) {
     setFlash(req, "danger", error.message);
   }

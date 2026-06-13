@@ -1045,6 +1045,17 @@ export function createEloadPromo(input) {
     .run(networkId, promoName, sellingPrice);
 }
 
+export function updateEloadPromo(promoId, input) {
+  const promoName = String(input.promoName || "").trim();
+  const sellingPrice = Number(input.sellingPrice || 0);
+  const promo = db.prepare("SELECT promo_id, network_id FROM eload_promos WHERE promo_id = ?").get(promoId);
+  if (!promo) throw new Error("Promo not found.");
+  if (!promoName) throw new Error("Promo name is required.");
+  if (sellingPrice <= 0) throw new Error("Selling price must be greater than zero.");
+  db.prepare("UPDATE eload_promos SET promo_name = ?, selling_price = ? WHERE promo_id = ?")
+    .run(promoName, sellingPrice, promoId);
+}
+
 export function deleteEloadPromo(promoId) {
   const promo = db.prepare("SELECT promo_id FROM eload_promos WHERE promo_id = ?").get(promoId);
   if (!promo) throw new Error("Promo not found.");
