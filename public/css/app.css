@@ -846,6 +846,33 @@ body .app-flash-popup.alert.show {
   box-shadow: var(--shadow-card);
 }
 
+.whats-new-modal .modal-content {
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.whats-new-modal .modal-header {
+  border-bottom: 1px solid var(--input-border);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand-emerald) 12%, transparent), color-mix(in srgb, var(--brand-cyan) 8%, transparent));
+}
+
+.whats-new-modal .modal-footer {
+  border-top: 1px solid var(--input-border);
+}
+
+.whats-new-list {
+  padding-left: 1.15rem;
+}
+
+.whats-new-list li {
+  margin-bottom: 0.65rem;
+  color: var(--text-strong);
+}
+
+.whats-new-list li:last-child {
+  margin-bottom: 0;
+}
+
 .badge-soft-success { background: rgba(16, 185, 129, 0.14); color: #0d7c5f; }
 .badge-soft-warning { background: rgba(245, 158, 11, 0.15); color: #9a6807; }
 .badge-soft-danger { background: rgba(239, 68, 68, 0.14); color: #af2f2f; }

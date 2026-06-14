@@ -1,0 +1,10 @@
+{
+  "version": "1.0.1",
+  "changes": [
+    "Added configurable eLoad networks and promo editing",
+    "Added Docker deployment support",
+    "Improved dashboard, logs, and mobile cart experience",
+    "Fixed database save behavior when updating records",
+    "Fixed version pop-up to show after signing in."
+  ]
+}

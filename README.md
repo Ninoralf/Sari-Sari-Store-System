@@ -109,6 +109,37 @@ npm run test:smoke
 
 This starts the server, checks the login flow, and verifies the main pages and CSV export routes.
 
+## Updates And Versions
+
+This project keeps release history and popup update notes in two separate files:
+
+- `CHANGELOG.md` stores the fuller project release history.
+- `public/version.json` powers the in-app "What's New" popup shown to users.
+
+When publishing a user-facing update:
+
+1. Update `CHANGELOG.md` with the release summary.
+2. Update `public/version.json` with the new version number and the list of changes you want shown in the popup.
+
+Important behavior:
+
+- If you change `public/version.json` and increase `version`, the popup appears again for users.
+- If you only change the `changes` list but keep the same `version`, users who already saw that version will not get the popup again.
+- If you make code changes but do not update `public/version.json`, no new "What's New" popup will appear.
+
+Example `public/version.json`:
+
+```json
+{
+  "version": "1.0.1",
+  "changes": [
+    "Fixed inventory stock display",
+    "Improved dashboard loading speed",
+    "Updated eLoad promo management"
+  ]
+}
+```
+
 ## Project Structure
 
 ```text
