@@ -2,7 +2,26 @@
 
 All notable changes to the Sari-Sari Store Management System are documented here.
 
-This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.0.0` because the application now has a complete POS, inventory, eLoad/GCash, user management, settings, logging, and deployment-ready workflow.
+This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.3.0`.
+
+## [1.3.0] - 2026-06-16
+
+### What's New
+- Moved Category and Supplier management from Settings to the Inventory tab for centralized product management.
+- Added a global system footer displaying the developer's name and the current system version.
+
+### Changed
+- Integrated Category and Supplier management via modals with dedicated buttons in the inventory header.
+- Optimized inventory management buttons for better mobile responsiveness using dynamic sizing and padding.
+- Improved server-side version management to dynamically serve the version number across all views.
+
+## [1.2.0] - 2026-06-15
+
+### Changed
+- Moved the eLoad setting to the eLoad tab for better and faster navigation.
+- Updated the display of logs Tabs and Queue from eLoad Tabs.
+- The Logs tabs now display the load value instead of the selling price.
+- Fixed the Queue from eLoad not displaying the selling price.
 
 ## [1.0.0] - 2026-06-13
 

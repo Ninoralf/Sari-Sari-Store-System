@@ -2,6 +2,7 @@ import express from "express";
 import session from "express-session";
 import crypto from "node:crypto";
 import path from "node:path";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   addInventoryItem,
@@ -62,6 +63,9 @@ const app = express();
 const port = process.env.PORT || 3000;
 const sessionMaxAgeMs = 30 * 60 * 1000;
 const sessionCookieName = "store.sid";
+
+const versionData = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "public", "version.json"), "utf8"));
+const systemVersion = versionData.version;
 
 initializeDatabase();
 
@@ -209,6 +213,7 @@ app.use((req, res, next) => {
   res.locals.quickSearch = req.path === "/inventory" ? String(req.query.search || "") : "";
   res.locals.quickSearchStatus = req.path === "/inventory" ? inventoryStatus : "all";
   res.locals.flash = req.session.flash || null;
+  res.locals.version = systemVersion;
   res.locals.appearance = {
     theme: "Light Mode",
     colorScheme: "Emerald",
@@ -762,7 +767,7 @@ app.get("/settings", requireAuth, (req, res) => {
   const currentUser = getUserById(req.session.user.id);
   const isAdmin = currentUser?.role === "Admin";
   const allowedTabs = isAdmin
-    ? new Set(["store", "profile", "notifications", "appearance", "categories", "suppliers", "data"])
+    ? new Set(["store", "profile", "notifications", "appearance", "data"])
     : new Set(["profile", "appearance"]);
   const activeTab = allowedTabs.has(requestedTab) ? requestedTab : (isAdmin ? "store" : "profile");
 
@@ -936,7 +941,7 @@ app.post("/settings/categories/add", requireAuth, requireAdmin, (req, res) => {
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
-  res.redirect("/settings?tab=categories");
+  res.redirect("/inventory");
 });
 
 app.post("/settings/categories/:id/update", requireAuth, requireAdmin, (req, res) => {
@@ -946,7 +951,7 @@ app.post("/settings/categories/:id/update", requireAuth, requireAdmin, (req, res
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
-  res.redirect("/settings?tab=categories");
+  res.redirect("/inventory");
 });
 
 app.post("/settings/categories/:id/delete", requireAuth, requireAdmin, (req, res) => {
@@ -956,7 +961,7 @@ app.post("/settings/categories/:id/delete", requireAuth, requireAdmin, (req, res
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
-  res.redirect("/settings?tab=categories");
+  res.redirect("/inventory");
 });
 
 app.post("/settings/suppliers/add", requireAuth, requireAdmin, (req, res) => {
@@ -966,7 +971,7 @@ app.post("/settings/suppliers/add", requireAuth, requireAdmin, (req, res) => {
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
-  res.redirect("/settings?tab=suppliers");
+  res.redirect("/inventory");
 });
 
 app.post("/settings/suppliers/:id/update", requireAuth, requireAdmin, (req, res) => {
@@ -976,7 +981,7 @@ app.post("/settings/suppliers/:id/update", requireAuth, requireAdmin, (req, res)
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
-  res.redirect("/settings?tab=suppliers");
+  res.redirect("/inventory");
 });
 
 app.post("/settings/suppliers/:id/delete", requireAuth, requireAdmin, (req, res) => {
@@ -986,7 +991,7 @@ app.post("/settings/suppliers/:id/delete", requireAuth, requireAdmin, (req, res)
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
-  res.redirect("/settings?tab=suppliers");
+  res.redirect("/inventory");
 });
 
 app.post("/settings/eload/networks/add", requireAuth, requireAdmin, (req, res) => {

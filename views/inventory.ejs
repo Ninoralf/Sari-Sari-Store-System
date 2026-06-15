@@ -45,7 +45,13 @@
               <i class="bi bi-printer me-1"></i> Print
             </button>
             <% if (user && user.role === "Admin") { %>
-              <button class="btn btn-success rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#addItemModal">
+              <button class="btn btn-outline-primary btn-sm rounded-pill px-2 px-lg-4" data-bs-toggle="modal" data-bs-target="#manageCategoriesModal">
+                <i class="bi bi-tags me-1"></i> Categories
+              </button>
+              <button class="btn btn-outline-primary btn-sm rounded-pill px-2 px-lg-4" data-bs-toggle="modal" data-bs-target="#manageSuppliersModal">
+                <i class="bi bi-truck me-1"></i> Suppliers
+              </button>
+              <button class="btn btn-success btn-sm rounded-pill px-2 px-lg-4" data-bs-toggle="modal" data-bs-target="#addItemModal">
                 <i class="bi bi-plus-lg me-1"></i> Add Item
               </button>
             <% } %>
@@ -128,10 +134,193 @@
         </div>
       </div>
     </section>
+    <%- include("partials/footer") %>
   </main>
 </div>
 
 <% if (user && user.role === "Admin") { %>
+<!-- CATEGORY MANAGEMENT MODAL -->
+<div class="modal fade" id="manageCategoriesModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content rounded-4 shadow-lg border-0">
+      <div class="modal-header border-0 pb-0">
+        <div class="section-title">Manage Categories</div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div class="mini-note">Manage product categories used in inventory forms and reports.</div>
+          <button class="btn btn-success btn-sm rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#addCategoryModal">
+            <i class="bi bi-plus-lg me-1"></i> Add Category
+          </button>
+        </div>
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead>
+              <tr>
+                <th>Category ID</th>
+                <th>Category Name</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (!categories.length) { %>
+                <tr><td colspan="3" class="text-center py-4 mini-note">No categories added yet.</td></tr>
+              <% } else { %>
+                <% categories.forEach((category) => { %>
+                  <tr>
+                    <td class="fw-semibold"><%= category.category_id %></td>
+                    <td><%= category.category_name %></td>
+                    <td class="text-end">
+                      <button class="btn btn-sm btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#editCategoryModal-<%= category.category_id %>"><i class="bi bi-pencil"></i></button>
+                      <form class="d-inline" method="post" action="/settings/categories/<%= category.category_id %>/delete" onsubmit="return confirm('Delete this category? Categories used by products cannot be deleted.');">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                      </form>
+                    </td>
+                  </tr>
+                <% }) %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SUPPLIER MANAGEMENT MODAL -->
+<div class="modal fade" id="manageSuppliersModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content rounded-4 shadow-lg border-0">
+      <div class="modal-header border-0 pb-0">
+        <div class="section-title">Manage Suppliers</div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div class="mini-note">Manage supplier records for inventory references.</div>
+          <button class="btn btn-success btn-sm rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#addSupplierModal">
+            <i class="bi bi-plus-lg me-1"></i> Add Supplier
+          </button>
+        </div>
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead>
+              <tr>
+                <th>Supplier ID</th>
+                <th>Supplier Name</th>
+                <th>Contact No</th>
+                <th>Address</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (!suppliers.length) { %>
+                <tr><td colspan="5" class="text-center py-4 mini-note">No suppliers added yet.</td></tr>
+              <% } else { %>
+                <% suppliers.forEach((supplier) => { %>
+                  <tr>
+                    <td class="fw-semibold"><%= supplier.supplier_id %></td>
+                    <td><%= supplier.supplier_name %></td>
+                    <td><%= supplier.contact_no || "-" %></td>
+                    <td><%= supplier.address || "-" %></td>
+                    <td class="text-end">
+                      <button class="btn btn-sm btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#editSupplierModal-<%= supplier.supplier_id %>"><i class="bi bi-pencil"></i></button>
+                      <form class="d-inline" method="post" action="/settings/suppliers/<%= supplier.supplier_id %>/delete" onsubmit="return confirm('Delete this supplier?');">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                      </form>
+                    </td>
+                  </tr>
+                <% }) %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD CATEGORY MODAL -->
+<div class="modal fade" id="addCategoryModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="/settings/categories/add">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="modal-header"><h5 class="modal-title">Add Category</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <label class="form-label">Category Name</label>
+          <input class="form-control" name="categoryName" required>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#manageCategoriesModal">Back</button><button class="btn btn-success">Save Category</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<% categories.forEach((category) => { %>
+  <!-- EDIT CATEGORY MODAL -->
+  <div class="modal fade" id="editCategoryModal-<%= category.category_id %>" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <form method="post" action="/settings/categories/<%= category.category_id %>/update">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <div class="modal-header"><h5 class="modal-title">Edit Category</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body">
+            <label class="form-label">Category Name</label>
+            <input class="form-control" name="categoryName" value="<%= category.category_name %>" required>
+          </div>
+          <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#manageCategoriesModal">Back</button><button class="btn btn-success">Update Category</button></div>
+        </form>
+      </div>
+    </div>
+  </div>
+<% }) %>
+
+<!-- ADD SUPPLIER MODAL -->
+<div class="modal fade" id="addSupplierModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="/settings/suppliers/add">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="modal-header"><h5 class="modal-title">Add Supplier</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6"><label class="form-label">Supplier Name</label><input class="form-control" name="supplierName" required></div>
+            <div class="col-md-6"><label class="form-label">Contact No</label><input class="form-control" name="contactNo"></div>
+            <div class="col-12"><label class="form-label">Address</label><textarea class="form-control" name="address" rows="3"></textarea></div>
+          </div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#manageSuppliersModal">Back</button><button class="btn btn-success">Save Supplier</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<% suppliers.forEach((supplier) => { %>
+  <!-- EDIT SUPPLIER MODAL -->
+  <div class="modal fade" id="editSupplierModal-<%= supplier.supplier_id %>" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <form method="post" action="/settings/suppliers/<%= supplier.supplier_id %>/update">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <div class="modal-header"><h5 class="modal-title">Edit Supplier</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body">
+            <div class="row g-3">
+              <div class="col-md-6"><label class="form-label">Supplier Name</label><input class="form-control" name="supplierName" value="<%= supplier.supplier_name %>" required></div>
+              <div class="col-md-6"><label class="form-label">Contact No</label><input class="form-control" name="contactNo" value="<%= supplier.contact_no || '' %>"></div>
+              <div class="col-12"><label class="form-label">Address</label><textarea class="form-control" name="address" rows="3"><%= supplier.address || '' %></textarea></div>
+            </div>
+          </div>
+          <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#manageSuppliersModal">Back</button><button class="btn btn-success">Update Supplier</button></div>
+        </form>
+      </div>
+    </div>
+  </div>
+<% }) %>
+
 <!-- ADD ITEM MODAL (FLOATING PANEL) -->
 <div class="modal fade" id="addItemModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
