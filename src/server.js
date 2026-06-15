@@ -562,6 +562,7 @@ app.get("/eload", requireAuth, (req, res) => {
     pageTitle: "Eload",
     todayLabel: todayLabel(),
     requests,
+    eloadNetworks: listEloadNetworks(),
     eloadPromoCatalog: getEloadPromoCatalog(),
     requestsFingerprint: buildDigitalRequestsFingerprint(requests),
     formatCurrency,
@@ -594,7 +595,7 @@ app.post("/eload/requests", requireAuth, (req, res) => {
       const loadType = String(req.body.loadType || "").trim().toLowerCase();
       const network = String(req.body.network || "").trim().toUpperCase();
       const loadValue = String(req.body.loadValue || "").trim();
-      const amount = loadType === "regular" ? Number(req.body.amount || 0) : parseCurrencyAmount(loadValue);
+      const amount = Number(req.body.amount || 0);
 
       if (!network) throw new Error("Choose a network for the eload request.");
       if (!loadValue) throw new Error("Choose a load option for the eload request.");
@@ -761,7 +762,7 @@ app.get("/settings", requireAuth, (req, res) => {
   const currentUser = getUserById(req.session.user.id);
   const isAdmin = currentUser?.role === "Admin";
   const allowedTabs = isAdmin
-    ? new Set(["store", "profile", "notifications", "appearance", "categories", "suppliers", "eload", "data"])
+    ? new Set(["store", "profile", "notifications", "appearance", "categories", "suppliers", "data"])
     : new Set(["profile", "appearance"]);
   const activeTab = allowedTabs.has(requestedTab) ? requestedTab : (isAdmin ? "store" : "profile");
 
@@ -995,7 +996,7 @@ app.post("/settings/eload/networks/add", requireAuth, requireAdmin, (req, res) =
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
-  res.redirect("/settings?tab=eload");
+  res.redirect("/eload#view-set");
 });
 
 app.post("/settings/eload/networks/:id/delete", requireAuth, requireAdmin, (req, res) => {
@@ -1005,7 +1006,7 @@ app.post("/settings/eload/networks/:id/delete", requireAuth, requireAdmin, (req,
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
-  res.redirect("/settings?tab=eload");
+  res.redirect("/eload#view-set");
 });
 
 app.post("/settings/eload/promos/add", requireAuth, requireAdmin, (req, res) => {
@@ -1015,7 +1016,7 @@ app.post("/settings/eload/promos/add", requireAuth, requireAdmin, (req, res) => 
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
-  res.redirect("/settings?tab=eload");
+  res.redirect("/eload#view-set");
 });
 
 app.post("/settings/eload/promos/:id/update", requireAuth, requireAdmin, (req, res) => {
@@ -1025,7 +1026,7 @@ app.post("/settings/eload/promos/:id/update", requireAuth, requireAdmin, (req, r
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
-  res.redirect("/settings?tab=eload");
+  res.redirect("/eload#view-set");
 });
 
 app.post("/settings/eload/promos/:id/delete", requireAuth, requireAdmin, (req, res) => {
@@ -1035,7 +1036,7 @@ app.post("/settings/eload/promos/:id/delete", requireAuth, requireAdmin, (req, r
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
-  res.redirect("/settings?tab=eload");
+  res.redirect("/eload#view-set");
 });
 
 app.get("/settings/export/inventory.csv", requireAuth, requireAdmin, (req, res) => {

@@ -1,10 +1,11 @@
 {
-  "version": "1.0.1",
+  "version": "1.2.0",
   "changes": [
-    "Added configurable eLoad networks and promo editing",
-    "Added Docker deployment support",
-    "Improved dashboard, logs, and mobile cart experience",
-    "Fixed database save behavior when updating records",
-    "Fixed version pop-up to show after signing in."
+    "MAJOR CHANGES",
+    " Move the eload setting to the eload tab, for better and faster navigation",
+    "MINOR CHANGES",
+    " Update the display of logs Tabs and Queue from eload Tabs where:",
+    "    The Logs tabs display the load value and not the selling price",
+    "    The Queue from eload didnt display the selling price"
   ]
 }
