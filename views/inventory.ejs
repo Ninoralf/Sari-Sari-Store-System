@@ -7,29 +7,41 @@
       <%- include("partials/flash") %>
       
       <!-- Inventory Header & Metrics -->
-      <div class="row g-3 mb-4 inventory-summary-grid">
-        <div class="col-md-3">
-          <div class="content-card p-3 border-start border-4 border-primary h-100">
-            <div class="mini-note text-uppercase fw-bold">Total Items</div>
-            <div class="h2 mb-0 fw-bold" id="inventorySummaryTotal"><%= summary.total %></div>
+      <div class="row g-2 g-lg-3 mb-4 inventory-summary-grid">
+        <div class="col-3 col-md-3">
+          <div class="content-card dashboard-metric-card p-3 border-start border-4 border-primary h-100">
+            <div class="dashboard-metric-body">
+              <div class="dashboard-metric-icon d-lg-none"><i class="bi bi-box-seam"></i></div>
+              <div class="mini-note text-uppercase fw-bold dashboard-metric-label d-none d-lg-block">Total Items</div>
+              <div class="h2 mb-0 fw-bold dashboard-metric-value" id="inventorySummaryTotal"><%= summary.total %></div>
+            </div>
           </div>
         </div>
-        <div class="col-md-3">
-          <div class="content-card p-3 border-start border-4 border-success h-100">
-            <div class="mini-note text-uppercase fw-bold">In Stock</div>
-            <div class="h2 mb-0 fw-bold text-success" id="inventorySummaryInStock"><%= summary.inStock %></div>
+        <div class="col-3 col-md-3">
+          <div class="content-card dashboard-metric-card p-3 border-start border-4 border-success h-100">
+            <div class="dashboard-metric-body">
+              <div class="dashboard-metric-icon d-lg-none"><i class="bi bi-check-circle"></i></div>
+              <div class="mini-note text-uppercase fw-bold dashboard-metric-label d-none d-lg-block">In Stock</div>
+              <div class="h2 mb-0 fw-bold text-success dashboard-metric-value" id="inventorySummaryInStock"><%= summary.inStock %></div>
+            </div>
           </div>
         </div>
-        <div class="col-md-3">
-          <div class="content-card p-3 border-start border-4 border-warning h-100">
-            <div class="mini-note text-uppercase fw-bold">Low Stock</div>
-            <div class="h2 mb-0 fw-bold text-warning" id="inventorySummaryLowStock"><%= summary.lowStock %></div>
+        <div class="col-3 col-md-3">
+          <div class="content-card dashboard-metric-card p-3 border-start border-4 border-warning h-100">
+            <div class="dashboard-metric-body">
+              <div class="dashboard-metric-icon d-lg-none"><i class="bi bi-exclamation-triangle"></i></div>
+              <div class="mini-note text-uppercase fw-bold dashboard-metric-label d-none d-lg-block">Low Stock</div>
+              <div class="h2 mb-0 fw-bold text-warning dashboard-metric-value" id="inventorySummaryLowStock"><%= summary.lowStock %></div>
+            </div>
           </div>
         </div>
-        <div class="col-md-3">
-          <div class="content-card p-3 border-start border-4 border-danger h-100">
-            <div class="mini-note text-uppercase fw-bold">Out of Stock</div>
-            <div class="h2 mb-0 fw-bold text-danger" id="inventorySummaryOutOfStock"><%= summary.outOfStock %></div>
+        <div class="col-3 col-md-3">
+          <div class="content-card dashboard-metric-card p-3 border-start border-4 border-danger h-100">
+            <div class="dashboard-metric-body">
+              <div class="dashboard-metric-icon d-lg-none"><i class="bi bi-x-circle"></i></div>
+              <div class="mini-note text-uppercase fw-bold dashboard-metric-label d-none d-lg-block">Out of Stock</div>
+              <div class="h2 mb-0 fw-bold text-danger dashboard-metric-value" id="inventorySummaryOutOfStock"><%= summary.outOfStock %></div>
+            </div>
           </div>
         </div>
       </div>
@@ -38,21 +50,20 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
           <div>
             <div class="section-title">Inventory Management</div>
-            <div class="mini-note">Review and manage your store products.</div>
           </div>
           <div class="d-flex gap-2">
-            <button class="btn btn-outline-secondary btn-sm rounded-pill px-3" id="inventoryPrintButton">
-              <i class="bi bi-printer me-1"></i> Print
+            <button class="btn btn-outline-secondary btn-sm rounded-pill px-3" id="inventoryPrintButton" title="Print">
+              <i class="bi bi-printer"></i> <span class="d-none d-lg-inline ms-1">Print</span>
             </button>
             <% if (user && user.role === "Admin") { %>
-              <button class="btn btn-outline-primary btn-sm rounded-pill px-2 px-lg-4" data-bs-toggle="modal" data-bs-target="#manageCategoriesModal">
-                <i class="bi bi-tags me-1"></i> Categories
+              <button class="btn btn-outline-primary btn-sm rounded-pill px-2 px-lg-4" data-bs-toggle="modal" data-bs-target="#manageCategoriesModal" title="Categories">
+                <i class="bi bi-tags"></i> <span class="d-none d-lg-inline ms-1">Categories</span>
               </button>
-              <button class="btn btn-outline-primary btn-sm rounded-pill px-2 px-lg-4" data-bs-toggle="modal" data-bs-target="#manageSuppliersModal">
-                <i class="bi bi-truck me-1"></i> Suppliers
+              <button class="btn btn-outline-primary btn-sm rounded-pill px-2 px-lg-4" data-bs-toggle="modal" data-bs-target="#manageSuppliersModal" title="Suppliers">
+                <i class="bi bi-truck"></i> <span class="d-none d-lg-inline ms-1">Suppliers</span>
               </button>
-              <button class="btn btn-success btn-sm rounded-pill px-2 px-lg-4" data-bs-toggle="modal" data-bs-target="#addItemModal">
-                <i class="bi bi-plus-lg me-1"></i> Add Item
+              <button class="btn btn-success btn-sm rounded-pill px-2 px-lg-4" data-bs-toggle="modal" data-bs-target="#addItemModal" title="Add Item">
+                <i class="bi bi-plus-lg"></i> <span class="d-none d-lg-inline ms-1">Add Item</span>
               </button>
             <% } %>
           </div>

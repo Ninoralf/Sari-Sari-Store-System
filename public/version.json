@@ -1,13 +1,13 @@
 {
-  "version": "1.4.0",
+  "version": "1.5.0",
   "changes": [
     "MAJOR CHANGES",
-    " Consolidated Reports functionality into the Dashboard for a unified business overview.",
-    " Removed the standalone Reports tab to streamline navigation and reduce clutter.",
-    " Separated Monthly Sales metrics into three dedicated cards: Product Sales, eLoad Sales, and GCash Sales.",
+    " Implemented a fully responsive, icon-driven status card system for Dashboard and Inventory on mobile devices.",
+    " Unified the metrics grid into a high-density 4-column layout on mobile for maximum information utility.",
+    " Removed horizontal scrolling on mobile by strictly fitting all layout containers to the viewport.",
     "MINOR CHANGES",
-    " Added an 'Analytics & Long-term Insights' section to the Dashboard with weekly and monthly trend charts.",
-    " Integrated Category Revenue Breakdown into the Dashboard with visual progress bars.",
-    " Restructured the Inventory status grid into a single horizontal row for better space utilization."
+    " Added automatic switching between icon-only (Mobile) and text+description (PC) views for all status metrics.",
+    " Optimized Inventory Management buttons into compact icon-only circular buttons on mobile.",
+    " Scaled down typography and icon sizes for better fit and readability on small screens."
   ]
 }

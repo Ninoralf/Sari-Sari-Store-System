@@ -401,7 +401,17 @@ body[data-theme="Dark Mode"] .mobile-bottom-tabs {
   box-shadow: 0 1rem 2.7rem rgba(0, 0, 0, 0.46), 0 0 1.8rem rgba(124, 58, 237, 0.2);
 }
 
-.app-shell { min-height: 100vh; }
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+  position: relative;
+}
+
+.app-shell { 
+  min-height: 100vh;
+  overflow-x: hidden;
+  width: 100%;
+}
 
 .app-shell > .sidebar {
   flex: 0 0 280px;
@@ -409,6 +419,7 @@ body[data-theme="Dark Mode"] .mobile-bottom-tabs {
 
 .app-shell > main {
   min-width: 0;
+  overflow-x: hidden;
 }
 
 .login-shell {
@@ -1846,113 +1857,73 @@ body[data-font-size] .mini-note { font-size: 0.85em; }
     --bs-gutter-y: 0.75rem;
   }
 
-  .dashboard-metrics-grid > [class*="col-"] {
-    flex: 0 0 auto;
-    width: 33.333333%;
-  }
-
+  .dashboard-metrics-grid > [class*="col-"],
   .inventory-summary-grid > [class*="col-"] {
     flex: 0 0 auto;
     width: 25%;
   }
 
-  .inventory-summary-grid .dashboard-metric-card {
-    aspect-ratio: auto;
-    min-height: 5rem;
-    padding: 0.45rem !important;
-    border-radius: 0.85rem;
-  }
-
-  .inventory-summary-grid .dashboard-metric-body {
-    gap: 0.35rem;
-  }
-
-  .inventory-summary-grid .dashboard-metric-label {
-    font-size: clamp(0.58rem, 2.25vw, 0.68rem);
-    line-height: 1.08;
-  }
-
-  .inventory-summary-grid .dashboard-metric-value {
-    top: -0.15rem;
-    right: calc(50% - 1.6rem);
-    max-width: 2.5rem;
-    min-width: 1.25rem;
-    min-height: 1.25rem;
-    padding: 0.14rem 0.28rem;
-    font-size: clamp(0.58rem, 2.2vw, 0.68rem);
-  }
-
-  .inventory-summary-grid .stat-icon {
-    width: 2.3rem;
-    height: 2.3rem;
-    border-radius: 0.75rem;
-  }
-
-  .inventory-summary-grid .stat-icon i {
-    font-size: 1.05rem !important;
+  .dashboard-metric-card {
+    aspect-ratio: 1;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem !important;
+    text-align: center;
+    border-left-width: 3px !important;
+    border-radius: 0.75rem !important;
+    min-height: 0;
   }
 
   .dashboard-metric-body {
-    position: relative;
+    display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center !important;
-    gap: 0.5rem;
+    justify-content: center;
     width: 100%;
-    min-width: 0;
+    gap: 0.1rem;
+    overflow: hidden;
+  }
+
+  .dashboard-metric-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.85rem;
+    height: 1.85rem;
+    background: var(--surface-soft);
+    border-radius: 999px;
+    margin-bottom: 0.05rem;
+    font-size: 0.9rem;
+    color: var(--brand-teal);
+  }
+
+  .border-primary .dashboard-metric-icon { color: var(--info); background: rgba(59, 130, 246, 0.1); }
+  .border-warning .dashboard-metric-icon { color: var(--warning); background: rgba(245, 158, 11, 0.1); }
+  .border-danger .dashboard-metric-icon { color: var(--danger); background: rgba(239, 68, 68, 0.1); }
+  .border-success .dashboard-metric-icon { color: var(--brand-emerald); background: rgba(16, 185, 129, 0.1); }
+  .border-info .dashboard-metric-icon { color: var(--brand-cyan); background: rgba(6, 182, 212, 0.1); }
+
+  .dashboard-metric-value {
+    display: block;
+    width: 100%;
+    font-size: clamp(0.6rem, 2.8vw, 0.85rem) !important;
+    line-height: 1;
+    font-weight: 800;
+    margin: 0 !important;
+    word-break: break-all;
     text-align: center;
   }
 
-  .dashboard-metric-copy {
-    display: contents;
-  }
-
-  .dashboard-metric-note,
-  .dashboard-metric-breakdown {
+  .dashboard-metric-note {
     display: none !important;
   }
 
-  .dashboard-metric-label {
-    display: block;
-    order: 3;
-    width: 100%;
-    font-size: clamp(0.64rem, 2.7vw, 0.78rem);
-    line-height: 1.15;
-    overflow-wrap: anywhere;
-  }
-
-  .dashboard-metric-value {
-    position: absolute;
-    top: -0.3rem;
-    right: calc(50% - 2.05rem);
-    z-index: 1;
-    max-width: 4.6rem;
-    min-width: 1.45rem;
-    min-height: 1.45rem;
-    margin: 0;
-    padding: 0.2rem 0.35rem;
-    border-radius: 999px;
-    background: var(--surface-card);
-    border: 1px solid var(--line-soft);
-    box-shadow: 0 0.45rem 1rem rgba(13, 148, 136, 0.12);
-    color: var(--text-strong) !important;
-    font-size: clamp(0.68rem, 2.7vw, 0.82rem);
-    line-height: 1.05;
-    text-align: center;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    order: 2;
-  }
-
-  .dashboard-metric-card .stat-icon {
-    flex: 0 0 auto;
-    order: 1;
-  }
-
   @media (max-width: 379.98px) {
-    .dashboard-metrics-grid > [class*="col-"] {
-      width: 50%;
+    .dashboard-metrics-grid > [class*="col-"],
+    .inventory-summary-grid > [class*="col-"] {
+      width: 25%;
     }
   }
 

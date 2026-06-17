@@ -4,6 +4,18 @@ All notable changes to the Sari-Sari Store Management System are documented here
 
 This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.4.0`.
 
+## [1.5.0] - 2026-06-18
+
+### What's New
+- Responsive Status Metrics: Implemented an adaptive card system that displays full text on PC and compact icons on mobile for both Dashboard and Inventory pages.
+- High-Density Grid: Optimized the mobile layout to show 4 status metrics per row (up from 2), significantly increasing data visibility on small screens.
+- Mobile Button Optimization: Transformed large inventory management buttons into sleek, icon-only circular buttons on mobile devices.
+
+### Changed
+- Improved mobile viewport containment with `overflow-x: hidden` to eliminate horizontal scrolling.
+- Refined typography and spacing across all mobile metric cards for a cleaner, modern look.
+- Synchronized visual styles between the Dashboard and Inventory summary sections for consistency.
+
 ## [1.4.0] - 2026-06-17
 
 ### What's New
