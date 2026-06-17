@@ -1928,9 +1928,10 @@ body[data-font-size] .mini-note { font-size: 0.85em; }
   }
 
   .pos-cart-flyout {
+    left: 0.5rem;
     right: 0.5rem;
+    width: auto;
     bottom: 7.25rem;
-    width: calc(100vw - 1rem);
     max-height: calc(100vh - 8.5rem);
     border-radius: 1.25rem;
   }
@@ -2051,10 +2052,10 @@ body[data-font-size] .mini-note { font-size: 0.85em; }
   }
 
   .pos-cart-summary-card {
-    aspect-ratio: 1;
+    min-height: 5.5rem;
     align-items: center;
     justify-content: center;
-    padding: 0.55rem !important;
+    padding: 0.65rem !important;
     text-align: center;
   }
 
@@ -2062,12 +2063,14 @@ body[data-font-size] .mini-note { font-size: 0.85em; }
     font-size: clamp(0.64rem, 2.5vw, 0.78rem);
     line-height: 1.15;
     overflow-wrap: anywhere;
+    margin-bottom: 0.25rem;
   }
 
   .pos-cart-summary-value {
-    font-size: clamp(1.1rem, 5vw, 1.45rem);
-    line-height: 1.05;
-    white-space: nowrap;
+    font-size: clamp(1rem, 4.5vw, 1.35rem);
+    line-height: 1.1;
+    white-space: normal;
+    word-break: break-word;
   }
 
   .pos-cart-summary-money {

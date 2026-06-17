@@ -2,7 +2,17 @@
 
 All notable changes to the Sari-Sari Store Management System are documented here.
 
-This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.4.0`.
+This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.5.1`.
+
+## [1.5.1] - 2026-06-18
+
+### What's New
+- Mobile Cart Optimization: Redesigned the cart summary into a responsive grid (2+1 layout) to prevent cramped text on small screens.
+- Enhanced Cart Viewport Fit: Fixed the cart drawer positioning and width on mobile to ensure it anchors correctly within the viewport without being cut off.
+
+### Changed
+- Disabled automatic search focus when entering the Sales tab to prevent the keyboard from popping up unexpectedly on mobile.
+- Refined cart quantity controls on mobile by removing fixed widths that were causing layout breakage in narrow tables.
 
 ## [1.5.0] - 2026-06-18
 

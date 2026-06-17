@@ -1,13 +1,12 @@
 {
-  "version": "1.5.0",
+  "version": "1.5.1",
   "changes": [
     "MAJOR CHANGES",
-    " Implemented a fully responsive, icon-driven status card system for Dashboard and Inventory on mobile devices.",
-    " Unified the metrics grid into a high-density 4-column layout on mobile for maximum information utility.",
-    " Removed horizontal scrolling on mobile by strictly fitting all layout containers to the viewport.",
+    " Redesigned the mobile cart summary into a responsive 2+1 grid layout for better fit and readability.",
+    " Fixed cart drawer positioning on mobile to prevent clipping and ensure it stays within viewport boundaries.",
     "MINOR CHANGES",
-    " Added automatic switching between icon-only (Mobile) and text+description (PC) views for all status metrics.",
-    " Optimized Inventory Management buttons into compact icon-only circular buttons on mobile.",
-    " Scaled down typography and icon sizes for better fit and readability on small screens."
+    " Disabled automatic search input focus on the Sales page to improve mobile navigation.",
+    " Optimized cart table quantity controls for narrow mobile screens.",
+    " Refined summary card typography and wrapping to handle large currency values on small screens."
   ]
 }
