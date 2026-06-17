@@ -395,6 +395,9 @@ app.get("/", requireAuth, (req, res) => {
     chartTitle: chartData.title,
     chartLabels: chartData.labels,
     chartDatasets: chartData.datasets,
+    weeklySeries: dashboard.weeklySeries,
+    monthlySeries: dashboard.monthlySeries,
+    categoryBreakdown: dashboard.categoryBreakdown,
     formatCurrency
   });
 });
@@ -412,7 +415,10 @@ app.get("/api/dashboard/overview", requireApiAuth, (req, res) => {
     bestSellingItem: dashboard.bestSellingItem,
     lowStockItems: sanitizeInventoryItems(dashboard.lowStockItems, isAdmin),
     pendingEloadRequests: dashboard.pendingEloadRequests,
-    pendingGcashRequests: dashboard.pendingGcashRequests
+    pendingGcashRequests: dashboard.pendingGcashRequests,
+    weeklySeries: dashboard.weeklySeries,
+    monthlySeries: dashboard.monthlySeries,
+    categoryBreakdown: dashboard.categoryBreakdown
   });
 });
 
@@ -740,10 +746,6 @@ app.post("/sales/add", requireAuth, requireSalesAccess, (req, res) => {
     setFlash(req, "danger", error.message);
   }
   res.redirect("/sales");
-});
-
-app.get("/reports", requireAuth, requireAdmin, (req, res) => {
-  res.render("reports", { pageTitle: "Reports", todayLabel: todayLabel(), reports: getReportsData(), formatCurrency });
 });
 
 app.get("/logs", requireAuth, (req, res) => {

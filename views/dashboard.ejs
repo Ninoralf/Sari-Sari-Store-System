@@ -10,8 +10,12 @@
         <div class="col-md-6 col-xl-4"><a class="content-card p-3 border-start border-4 border-warning h-100 d-block text-reset text-decoration-none" href="/inventory?status=Low%20Stock"><div class="mini-note text-uppercase fw-bold">Low Stock Items</div><div class="h2 mb-0 fw-bold text-warning" id="dashboardMetricLowStock"><%= metrics.lowStockItems %></div><div class="mini-note text-muted">Need attention soon</div></a></div>
         <div class="col-md-6 col-xl-4"><a class="content-card p-3 border-start border-4 border-danger h-100 d-block text-reset text-decoration-none" href="/inventory?status=Out%20of%20Stock"><div class="mini-note text-uppercase fw-bold">Out of Stock</div><div class="h2 mb-0 fw-bold text-danger" id="dashboardMetricOutOfStock"><%= metrics.outOfStockItems %></div><div class="mini-note text-muted">Reorder immediately</div></a></div>
         <div class="col-md-6 col-xl-4"><div class="content-card p-3 border-start border-4 border-success h-100"><div class="mini-note text-uppercase fw-bold">Daily Sales</div><div class="h2 mb-0 fw-bold text-success" id="dashboardMetricDailySales"><%= formatCurrency(metrics.dailySales) %></div><div class="mini-note text-muted">As of <%= currentDateLabel %></div></div></div>
-        <div class="col-md-6 col-xl-4"><div class="content-card p-3 border-start border-4 border-info h-100"><div class="mini-note text-uppercase fw-bold">Monthly Sales</div><div class="h2 mb-0 fw-bold text-primary" id="dashboardMetricMonthlySales"><%= formatCurrency(metrics.monthlySales) %></div><div class="mini-note text-muted">Rolling 30-day revenue</div><div class="dashboard-metric-breakdown mt-2 small"><div class="fw-semibold text-warning" id="dashboardMetricMonthlyProductsTotal"></div><div class="fw-semibold text-success" id="dashboardMetricMonthlyLoadTotal"></div><div class="fw-semibold text-primary" id="dashboardMetricMonthlyGcashTotal"></div></div></div></div>
+        <div class="col-md-6 col-xl-4"><div class="content-card p-3 border-start border-4 border-info h-100"><div class="mini-note text-uppercase fw-bold">Total Revenue</div><div class="h2 mb-0 fw-bold" id="dashboardMetricTotalRevenue"><%= formatCurrency(metrics.totalRevenue) %></div><div class="mini-note text-muted">Accumulated sales history</div></div></div>
+        <div class="col-md-6 col-xl-4"><div class="content-card p-3 border-start border-4 border-primary h-100"><div class="mini-note text-uppercase fw-bold">Monthly Product Sales</div><div class="h2 mb-0 fw-bold text-warning" id="dashboardMetricMonthlyProducts"><%= formatCurrency(metrics.monthlyProducts) %></div><div class="mini-note text-muted">Rolling 30-day inventory sales</div></div></div>
+        <div class="col-md-6 col-xl-4"><div class="content-card p-3 border-start border-4 border-success h-100"><div class="mini-note text-uppercase fw-bold">Monthly eLoad Sales</div><div class="h2 mb-0 fw-bold text-success" id="dashboardMetricMonthlyLoad"><%= formatCurrency(metrics.monthlyLoad) %></div><div class="mini-note text-muted">Rolling 30-day load volume</div></div></div>
+        <div class="col-md-6 col-xl-4"><div class="content-card p-3 border-start border-4 border-primary h-100"><div class="mini-note text-uppercase fw-bold">Monthly GCash Sales</div><div class="h2 mb-0 fw-bold text-primary" id="dashboardMetricMonthlyGcash"><%= formatCurrency(metrics.monthlyGcash) %></div><div class="mini-note text-muted">Rolling 30-day GCash volume</div></div></div>
       </div>
+
       <div class="row g-4 mb-4">
         <div class="col-12">
           <div class="content-card p-4">
@@ -28,7 +32,57 @@
           </div>
         </div>
       </div>
+
+      <!-- ANALYTICS SECTION -->
       <div class="row g-4 mb-4">
+        <div class="col-12">
+          <hr class="my-4 opacity-25">
+          <div class="section-title h4 mb-4"><i class="bi bi-graph-up-arrow me-2"></i>Analytics & Long-term Insights</div>
+        </div>
+        <div class="col-xl-6">
+          <div class="content-card p-4 h-100">
+            <div class="section-title mb-3">Weekly Sales Performance</div>
+            <canvas id="weeklyChart" height="180"></canvas>
+          </div>
+        </div>
+        <div class="col-xl-6">
+          <div class="content-card p-4 h-100">
+            <div class="section-title mb-3">Monthly Sales Trend</div>
+            <canvas id="monthlyChart" height="180"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-4 mb-4">
+        <div class="col-xl-6">
+          <div class="content-card p-4 h-100">
+            <div class="section-title mb-3">Sales by Category</div>
+            <canvas id="categoryPie" height="220"></canvas>
+          </div>
+        </div>
+        <div class="col-xl-6">
+          <div class="content-card p-4 h-100">
+            <div class="section-title mb-3">Category Revenue Breakdown</div>
+            <div class="vstack gap-4" id="categoryBreakdownList">
+              <% const totalBreakdown = categoryBreakdown.reduce((sum, item) => sum + item.revenue, 0); %>
+              <% categoryBreakdown.forEach((item, index) => { %>
+                <% const percentage = totalBreakdown ? ((item.revenue / totalBreakdown) * 100).toFixed(1) : 0; %>
+                <div>
+                  <div class="d-flex justify-content-between"><div class="fw-semibold"><%= item.category %></div><div><%= formatCurrency(item.revenue) %></div></div>
+                  <div class="progress progress-soft mt-2"><div class="progress-bar" role="progressbar" style="width: <%= percentage %>%; background-color: <%= ['#10b981', '#0d9488', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6'][index % 6] %>"></div></div>
+                  <div class="mini-note mt-1"><%= percentage %>% of total sales</div>
+                </div>
+              <% }) %>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-4 mb-4">
+        <div class="col-12">
+          <hr class="my-4 opacity-25">
+          <div class="section-title h4 mb-4"><i class="bi bi-activity me-2"></i>Real-time Operations</div>
+        </div>
         <div class="col-xl-6">
           <div class="content-card p-4 h-100">
             <div class="section-title mb-3"><i class="bi bi-trophy text-warning me-2"></i>Best Selling Item This Month</div>
@@ -120,20 +174,24 @@
   const dashboardMetricLowStock = document.getElementById("dashboardMetricLowStock");
   const dashboardMetricOutOfStock = document.getElementById("dashboardMetricOutOfStock");
   const dashboardMetricDailySales = document.getElementById("dashboardMetricDailySales");
-  const dashboardMetricMonthlySales = document.getElementById("dashboardMetricMonthlySales");
-  const dashboardMetricMonthlyProductsTotal = document.getElementById("dashboardMetricMonthlyProductsTotal");
-  const dashboardMetricMonthlyLoadTotal = document.getElementById("dashboardMetricMonthlyLoadTotal");
-  const dashboardMetricMonthlyGcashTotal = document.getElementById("dashboardMetricMonthlyGcashTotal");
+  const dashboardMetricTotalRevenue = document.getElementById("dashboardMetricTotalRevenue");
+  const dashboardMetricMonthlyProducts = document.getElementById("dashboardMetricMonthlyProducts");
+  const dashboardMetricMonthlyLoad = document.getElementById("dashboardMetricMonthlyLoad");
+  const dashboardMetricMonthlyGcash = document.getElementById("dashboardMetricMonthlyGcash");
   const dashboardBestSellingCard = document.getElementById("dashboardBestSellingCard");
   const dashboardLowStockList = document.getElementById("dashboardLowStockList");
   const dashboardPendingEloadList = document.getElementById("dashboardPendingEloadList");
   const dashboardPendingGcashList = document.getElementById("dashboardPendingGcashList");
+  const categoryBreakdownList = document.getElementById("categoryBreakdownList");
+  
   const rootStyles = getComputedStyle(document.body);
   const lineColor = rootStyles.getPropertyValue("--line-soft").trim();
   const textColor = rootStyles.getPropertyValue("--text-muted").trim();
   const gcashBlue = rootStyles.getPropertyValue("--brand-blue").trim() || "#3b82f6";
   const loadLightGreen = "#86efac";
   const productsOrange = "#f59e0b";
+  const chartColors = ["#10b981", "#0d9488", "#06b6d4", "#3b82f6", "#6366f1", "#8b5cf6"];
+  
   let dashboardOverviewRefreshInFlight = false;
   let dashboardChartRefreshInFlight = false;
 
@@ -148,19 +206,6 @@
 
   function formatPeso(value) {
     return new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(value || 0);
-  }
-
-  function sumDatasetValues(dataset) {
-    return (dataset?.values || dataset?.data || []).reduce((sum, value) => sum + Number(value || 0), 0);
-  }
-
-  function renderMonthlySalesBreakdown(datasets) {
-    const gcashTotal = sumDatasetValues(datasets[0]);
-    const loadTotal = sumDatasetValues(datasets[1]);
-    const productsTotal = sumDatasetValues(datasets[2]);
-    dashboardMetricMonthlyProductsTotal.textContent = `Products: ${formatPeso(productsTotal)}`;
-    dashboardMetricMonthlyLoadTotal.textContent = `eLoad: ${formatPeso(loadTotal)}`;
-    dashboardMetricMonthlyGcashTotal.textContent = `GCash: ${formatPeso(gcashTotal)}`;
   }
 
   const sharedOptions = {
@@ -191,6 +236,33 @@
     options: sharedOptions
   });
 
+  const weeklyChart = new Chart(document.getElementById("weeklyChart"), { 
+    type: "bar", 
+    data: { 
+      labels: <%- JSON.stringify(weeklySeries.map(x => x.label)) %>, 
+      datasets: [{ data: <%- JSON.stringify(weeklySeries.map(x => x.total)) %>, backgroundColor: "#10b981", borderRadius: 10 }] 
+    }, 
+    options: { plugins: { legend: { display: false } }, ...sharedOptions } 
+  });
+
+  const monthlyChart = new Chart(document.getElementById("monthlyChart"), { 
+    type: "line", 
+    data: { 
+      labels: <%- JSON.stringify(monthlySeries.map(x => x.label)) %>, 
+      datasets: [{ data: <%- JSON.stringify(monthlySeries.map(x => x.total)) %>, borderColor: "#0d9488", pointBackgroundColor: "#0d9488", tension: 0.35 }] 
+    }, 
+    options: { plugins: { legend: { display: false } }, ...sharedOptions } 
+  });
+
+  const categoryPie = new Chart(document.getElementById("categoryPie"), { 
+    type: "pie", 
+    data: { 
+      labels: <%- JSON.stringify(categoryBreakdown.map(x => x.category)) %>, 
+      datasets: [{ data: <%- JSON.stringify(categoryBreakdown.map(x => x.revenue)) %>, backgroundColor: chartColors }] 
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: textColor } } } }
+  });
+
   async function loadDashboardOverview() {
     if (dashboardOverviewRefreshInFlight || document.visibilityState !== "visible") return;
     dashboardOverviewRefreshInFlight = true;
@@ -205,7 +277,10 @@
       dashboardMetricLowStock.textContent = String(payload.metrics.lowStockItems);
       dashboardMetricOutOfStock.textContent = String(payload.metrics.outOfStockItems);
       dashboardMetricDailySales.textContent = formatPeso(payload.metrics.dailySales);
-      dashboardMetricMonthlySales.textContent = formatPeso(payload.metrics.monthlySales);
+      dashboardMetricTotalRevenue.textContent = formatPeso(payload.metrics.totalRevenue);
+      dashboardMetricMonthlyProducts.textContent = formatPeso(payload.metrics.monthlyProducts);
+      dashboardMetricMonthlyLoad.textContent = formatPeso(payload.metrics.monthlyLoad);
+      dashboardMetricMonthlyGcash.textContent = formatPeso(payload.metrics.monthlyGcash);
 
       if (payload.bestSellingItem && dashboardBestSellingCard) {
         dashboardBestSellingCard.innerHTML = `
@@ -256,6 +331,32 @@
           `).join("")
           : `<div class="mini-note text-center py-4">No pending GCash requests right now.</div>`;
       }
+      
+      // Update Analytics Charts
+      weeklyChart.data.labels = payload.weeklySeries.map(x => x.label);
+      weeklyChart.data.datasets[0].data = payload.weeklySeries.map(x => x.total);
+      weeklyChart.update();
+      
+      monthlyChart.data.labels = payload.monthlySeries.map(x => x.label);
+      monthlyChart.data.datasets[0].data = payload.monthlySeries.map(x => x.total);
+      monthlyChart.update();
+      
+      categoryPie.data.labels = payload.categoryBreakdown.map(x => x.category);
+      categoryPie.data.datasets[0].data = payload.categoryBreakdown.map(x => x.revenue);
+      categoryPie.update();
+      
+      const totalBreakdown = payload.categoryBreakdown.reduce((sum, item) => sum + item.revenue, 0);
+      categoryBreakdownList.innerHTML = payload.categoryBreakdown.map((item, index) => {
+        const percentage = totalBreakdown ? ((item.revenue / totalBreakdown) * 100).toFixed(1) : 0;
+        return `
+          <div>
+            <div class="d-flex justify-content-between"><div class="fw-semibold">${item.category}</div><div>${formatPeso(item.revenue)}</div></div>
+            <div class="progress progress-soft mt-2"><div class="progress-bar" role="progressbar" style="width: ${percentage}%; background-color: ${chartColors[index % 6]}"></div></div>
+            <div class="mini-note mt-1">${percentage}% of total sales</div>
+          </div>
+        `;
+      }).join("");
+
     } catch (error) {
       console.error(error);
     } finally {
@@ -279,7 +380,6 @@
       salesTrendChart.data.datasets[1].data = chart.datasets[1].values;
       salesTrendChart.data.datasets[2].data = chart.datasets[2].values;
       salesTrendChart.update();
-      renderMonthlySalesBreakdown(chart.datasets);
     } catch (error) {
       console.error(error);
     } finally {
@@ -287,11 +387,6 @@
     }
   }
 
-  renderMonthlySalesBreakdown([
-    { values: <%- JSON.stringify(chartDatasets[0].values) %> },
-    { values: <%- JSON.stringify(chartDatasets[1].values) %> },
-    { values: <%- JSON.stringify(chartDatasets[2].values) %> }
-  ]);
   loadDashboardOverview();
   refreshDashboardChart();
   window.setInterval(loadDashboardOverview, 10000);

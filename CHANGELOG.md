@@ -2,7 +2,19 @@
 
 All notable changes to the Sari-Sari Store Management System are documented here.
 
-This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.3.0`.
+This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.4.0`.
+
+## [1.4.0] - 2026-06-17
+
+### What's New
+- Consolidated Reports functionality into the Dashboard to provide a unified business overview in a single view.
+- Added an "Analytics & Long-term Insights" section to the Dashboard featuring weekly performance bars, monthly trend lines, and category revenue breakdowns.
+- Separated Monthly Sales metrics into three distinct cards for Product Sales, eLoad Sales, and GCash Sales.
+
+### Changed
+- Removed the standalone Reports tab from the navigation and account dropdown.
+- Restructured the Inventory status grid on the Inventory page into a single horizontal row for better space utilization.
+- Unified data retrieval logic in `src/db.js` to support the consolidated Dashboard.
 
 ## [1.3.0] - 2026-06-16
 

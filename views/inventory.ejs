@@ -7,26 +7,26 @@
       <%- include("partials/flash") %>
       
       <!-- Inventory Header & Metrics -->
-      <div class="row g-3 mb-4 dashboard-metrics-grid">
-        <div class="col-md-6 col-xl-4">
+      <div class="row g-3 mb-4 inventory-summary-grid">
+        <div class="col-md-3">
           <div class="content-card p-3 border-start border-4 border-primary h-100">
             <div class="mini-note text-uppercase fw-bold">Total Items</div>
             <div class="h2 mb-0 fw-bold" id="inventorySummaryTotal"><%= summary.total %></div>
           </div>
         </div>
-        <div class="col-md-6 col-xl-4">
+        <div class="col-md-3">
           <div class="content-card p-3 border-start border-4 border-success h-100">
             <div class="mini-note text-uppercase fw-bold">In Stock</div>
             <div class="h2 mb-0 fw-bold text-success" id="inventorySummaryInStock"><%= summary.inStock %></div>
           </div>
         </div>
-        <div class="col-md-6 col-xl-4">
+        <div class="col-md-3">
           <div class="content-card p-3 border-start border-4 border-warning h-100">
             <div class="mini-note text-uppercase fw-bold">Low Stock</div>
             <div class="h2 mb-0 fw-bold text-warning" id="inventorySummaryLowStock"><%= summary.lowStock %></div>
           </div>
         </div>
-        <div class="col-md-6 col-xl-4">
+        <div class="col-md-3">
           <div class="content-card p-3 border-start border-4 border-danger h-100">
             <div class="mini-note text-uppercase fw-bold">Out of Stock</div>
             <div class="h2 mb-0 fw-bold text-danger" id="inventorySummaryOutOfStock"><%= summary.outOfStock %></div>

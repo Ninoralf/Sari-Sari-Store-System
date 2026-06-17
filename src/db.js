@@ -1284,6 +1284,7 @@ export function getDashboardData() {
   const salesMetrics = getSalesMetrics();
   const bestSelling = getBestSellingData();
   const chartData = getDashboardChartData();
+  const reportsData = getReportsData();
   const gcashMonthly = chartData.datasets.find((dataset) => dataset.label === "GCash")?.values.reduce((sum, value) => sum + Number(value || 0), 0) || 0;
   const loadMonthly = chartData.datasets.find((dataset) => dataset.label === "Load")?.values.reduce((sum, value) => sum + Number(value || 0), 0) || 0;
   const productsMonthly = chartData.datasets.find((dataset) => dataset.label === "Products")?.values.reduce((sum, value) => sum + Number(value || 0), 0) || 0;
@@ -1294,14 +1295,6 @@ export function getDashboardData() {
   const pendingGcashRequests = listDigitalServiceRequests()
     .filter((request) => request.status === "Pending" && request.service_type === "gcash")
     .slice(0, 5);
-  const dailySeries = [];
-
-  for (let offset = 6; offset >= 0; offset -= 1) {
-    const current = shiftDate(getTodayDate(), -offset);
-    const dateKey = toIsoDate(current);
-    const total = db.prepare("SELECT COALESCE(SUM(total_amount), 0) AS total FROM sales WHERE sale_date = ?").get(dateKey).total;
-    dailySeries.push({ label: current.toLocaleDateString("en-US", { weekday: "short" }), total });
-  }
 
   return {
     metrics: {
@@ -1309,13 +1302,21 @@ export function getDashboardData() {
       lowStockItems: summary.lowStock,
       outOfStockItems: summary.outOfStock,
       dailySales: salesMetrics.todayTotal,
-      monthlySales: combinedMonthly
+      monthlySales: combinedMonthly,
+      monthlyProducts: productsMonthly,
+      monthlyLoad: loadMonthly,
+      monthlyGcash: gcashMonthly,
+      totalRevenue: reportsData.totalRevenue,
+      averageDaily: reportsData.averageDaily,
+      bestCategory: reportsData.bestCategory
     },
     lowStockItems: inventory.filter((item) => item.status !== "In Stock").slice(0, 4),
     pendingEloadRequests,
     pendingGcashRequests,
     bestSellingItem: bestSelling.items[0] || null,
-    dailySeries
+    weeklySeries: reportsData.weeklySeries,
+    monthlySeries: reportsData.monthlySeries,
+    categoryBreakdown: reportsData.categoryBreakdown
   };
 }
 

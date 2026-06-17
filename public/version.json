@@ -1,12 +1,13 @@
 {
-  "version": "1.3.0",
+  "version": "1.4.0",
   "changes": [
     "MAJOR CHANGES",
-    " Moved Category and Supplier management from Settings to the Inventory tab for centralized product management.",
-    " Integrated Category and Supplier management via modals with dedicated buttons in the inventory header.",
+    " Consolidated Reports functionality into the Dashboard for a unified business overview.",
+    " Removed the standalone Reports tab to streamline navigation and reduce clutter.",
+    " Separated Monthly Sales metrics into three dedicated cards: Product Sales, eLoad Sales, and GCash Sales.",
     "MINOR CHANGES",
-    " Added a global system footer displaying the developer's name and the current system version.",
-    " Optimized inventory management buttons for better mobile responsiveness.",
-    " Improved server-side version management to dynamically serve the version number across all views."
+    " Added an 'Analytics & Long-term Insights' section to the Dashboard with weekly and monthly trend charts.",
+    " Integrated Category Revenue Breakdown into the Dashboard with visual progress bars.",
+    " Restructured the Inventory status grid into a single horizontal row for better space utilization."
   ]
 }
