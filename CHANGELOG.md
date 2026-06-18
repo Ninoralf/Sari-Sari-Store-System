@@ -2,7 +2,17 @@
 
 All notable changes to the Sari-Sari Store Management System are documented here.
 
-This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.5.1`.
+This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.5.2`.
+
+## [1.5.2] - 2026-06-18
+
+### Fixed
+- E-load Copy Functionality: Fixed the broken copy button in the e-load queue by implementing a robust `copyToClipboard` utility.
+- Secure Context Fallback: Added a fallback mechanism for the clipboard API to ensure copying works on local network setups without HTTPS.
+- Visual Feedback: Implemented immediate visual cues (checkmark icon and "Copied!" tooltip) when a mobile number is successfully copied.
+
+### What's New
+- History Copy Support: Added copy buttons to the "Recent Requests" history section, allowing operators to quickly re-copy numbers from recently processed transactions.
 
 ## [1.5.1] - 2026-06-18
 

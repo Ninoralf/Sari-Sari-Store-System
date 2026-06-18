@@ -261,7 +261,7 @@
                           <button class="btn btn-sm btn-outline-danger px-3 rounded-pill" data-bs-toggle="modal" data-bs-target="#failRequestModal" data-request-id="<%= req.id %>" data-request-code="<%= req.request_code %>">
                             <i class="bi bi-x-circle"></i>
                           </button>
-                          <button class="btn btn-sm btn-outline-secondary px-3 rounded-pill" onclick="navigator.clipboard.writeText('<%= req.mobile_number %>')" title="Copy Number">
+                          <button class="btn btn-sm btn-outline-secondary px-3 rounded-pill" onclick="copyToClipboard('<%= req.mobile_number %>', this)" title="Copy Number">
                             <i class="bi bi-clipboard"></i>
                           </button>
                         </div>
@@ -317,9 +317,14 @@
                     <% recent.forEach(req => { %>
                       <div class="p-3 bg-light rounded-4 border-start border-4 <%= req.status === 'Completed' ? 'border-success' : 'border-danger' %>">
                         <div class="d-flex justify-content-between align-items-center">
-                          <div>
-                            <div class="fw-bold"><%= req.mobile_number %></div>
-                            <div class="mini-note text-muted"><%= req.service_type.toUpperCase() %> | <%= req.status %></div>
+                          <div class="d-flex align-items-center gap-3">
+                            <div>
+                              <div class="fw-bold"><%= req.mobile_number %></div>
+                              <div class="mini-note text-muted"><%= req.service_type.toUpperCase() %> | <%= req.status %></div>
+                            </div>
+                            <button class="btn btn-sm btn-link text-secondary p-0" onclick="copyToClipboard('<%= req.mobile_number %>', this)" title="Copy Number">
+                              <i class="bi bi-clipboard small"></i>
+                            </button>
                           </div>
                           <div class="text-end">
                             <div class="fw-bold">₱<%= req.amount.toLocaleString() %></div>
@@ -537,6 +542,44 @@
   function getSelectedPromo() {
     if (!selectedNetwork) return null;
     return (networkPromos[selectedNetwork] || []).find((promo) => promo.name === eloadPromoSelect.value) || null;
+  }
+
+  function copyToClipboard(text, btn) {
+    const rawNumber = String(text || "").replace(/\D/g, "");
+    const icon = btn.querySelector("i");
+    const originalClass = icon.className;
+    const originalTitle = btn.title;
+
+    function showSuccess() {
+      icon.className = "bi bi-check-lg text-success";
+      btn.title = "Copied!";
+      setTimeout(() => {
+        icon.className = originalClass;
+        btn.title = originalTitle;
+      }, 2000);
+    }
+
+    if (!navigator.clipboard) {
+      const textArea = document.createElement("textarea");
+      textArea.value = rawNumber;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      textArea.style.top = "0";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        if (document.execCommand('copy')) showSuccess();
+      } catch (err) {
+        console.error("Fallback copy failed", err);
+      }
+      document.body.removeChild(textArea);
+      return;
+    }
+
+    navigator.clipboard.writeText(rawNumber).then(showSuccess, (err) => {
+      console.error("Async copy failed", err);
+    });
   }
 
   function renderNetworks() {

@@ -1,12 +1,10 @@
 {
-  "version": "1.5.1",
+  "version": "1.5.2",
   "changes": [
-    "MAJOR CHANGES",
-    " Redesigned the mobile cart summary into a responsive 2+1 grid layout for better fit and readability.",
-    " Fixed cart drawer positioning on mobile to prevent clipping and ensure it stays within viewport boundaries.",
-    "MINOR CHANGES",
-    " Disabled automatic search input focus on the Sales page to improve mobile navigation.",
-    " Optimized cart table quantity controls for narrow mobile screens.",
-    " Refined summary card typography and wrapping to handle large currency values on small screens."
+    "FIXES",
+    " Fixed the copy-to-clipboard functionality in the e-load queue.",
+    " Added a robust copy function with a fallback for non-secure contexts.",
+    " Implemented visual feedback (icon change and tooltip) when a number is successfully copied.",
+    " Added copy buttons to the recent requests history for improved workflow."
   ]
 }
