@@ -356,8 +356,9 @@ body[data-theme="Dark Mode"] .dropdown-item.active {
 body[data-theme="Dark Mode"] .form-control,
 body[data-theme="Dark Mode"] .form-select,
 body[data-theme="Dark Mode"] .input-group-text,
+body[data-theme="Dark Mode"] .bg-light,
 body[data-theme="Dark Mode"] .table {
-  background-color: rgba(12, 15, 43, 0.88);
+  background-color: rgba(12, 15, 43, 0.88) !important;
   border-color: rgba(167, 139, 250, 0.22);
   color: var(--text-strong);
 }
@@ -2229,4 +2230,20 @@ body[data-font-size] .mini-note { font-size: 0.85em; }
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+.btn-white {
+  background-color: #ffffff;
+  color: #13312d;
+}
+
+body[data-theme="Dark Mode"] .btn-white {
+  background-color: var(--input-bg);
+  color: var(--text-strong);
+}
+
+.btn-check:checked + .btn-white {
+  background-color: var(--brand-emerald);
+  color: #ffffff;
+}
+
 

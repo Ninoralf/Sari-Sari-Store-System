@@ -2,7 +2,17 @@
 
 All notable changes to the Sari-Sari Store Management System are documented here.
 
-This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.5.2`.
+This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.5.3`.
+
+## [1.5.3] - 2026-06-18
+
+### Fixed
+- Dark Mode Visibility: Resolved issues where text was invisible in Dark Mode due to matching background colors, specifically affecting view toggles and selection buttons.
+- Theme-Aware Components: Overrode the `.bg-light` class in Dark Mode to use appropriate dark surface colors.
+- Improved Selectors: Fixed visibility for the "Choose Service Type" and "Choose Load" sections in the E-load tab.
+
+### What's New
+- Theme-Aware `btn-white`: Implemented a utility class that automatically adjusts its colors based on the active theme (Light/Dark).
 
 ## [1.5.2] - 2026-06-18
 
