@@ -25,6 +25,7 @@ import {
   getDashboardData,
   getDashboardChartData,
   getDatabasePath,
+  getInventoryItemByBarcode,
   getLogsData,
   getReportsData,
   getSalesMetrics,
@@ -442,6 +443,14 @@ app.get("/api/inventory", requireApiAuth, (req, res) => {
     count: items.length,
     items: sanitizeInventoryItems(items, isAdmin)
   });
+});
+
+app.get("/api/inventory/barcode/:barcode", requireApiAuth, (req, res) => {
+  const currentUser = getUserById(req.session.user.id);
+  const isAdmin = currentUser?.role === "Admin";
+  const item = getInventoryItemByBarcode(req.params.barcode);
+  if (!item) return res.status(404).json({ error: "Product not found." });
+  return res.json({ item: sanitizeInventoryItems([item], isAdmin)[0] });
 });
 
 app.get("/api/sales", requireApiAuth, requireSalesApiAccess, (req, res) => {

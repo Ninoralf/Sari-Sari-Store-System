@@ -17,6 +17,16 @@
               <input class="form-control border-0 bg-transparent py-2" id="quickItemSearch" placeholder="Search product or category..." autocomplete="off">
             </div>
           </div>
+
+          <div class="sales-barcode-panel mb-3">
+            <div class="input-group search-glass">
+              <span class="input-group-text border-0 bg-transparent ps-3"><i class="bi bi-upc-scan text-muted"></i></span>
+              <input class="form-control border-0 bg-transparent py-2" id="salesBarcodeInput" placeholder="Scan or type barcode, then press Enter" autocomplete="off">
+            </div>
+            <button class="btn btn-success btn-lg sales-scan-button" type="button" id="salesScanProductButton">
+              <i class="bi bi-camera me-2"></i>Scan Product
+            </button>
+          </div>
           
           <!-- Category Row (Scrollable) -->
           <div class="d-flex gap-2 category-pill-container flex-nowrap overflow-auto no-scrollbar py-1">
@@ -116,11 +126,16 @@
   </div>
 </aside>
 
+<%- include("partials/barcode-scanner-modal", { scannerModalId: "salesBarcodeScannerModal" }) %>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="/js/barcode-scanner.js"></script>
 <script>
   const inventoryItems = <%- JSON.stringify(inventory) %>;
   const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
   const searchInput = document.getElementById("quickItemSearch");
+  const salesBarcodeInput = document.getElementById("salesBarcodeInput");
+  const salesScanProductButton = document.getElementById("salesScanProductButton");
   const suggestions = document.getElementById("quickSuggestions");
   const emptySearchState = document.getElementById("emptySearchState");
   const categoryButtons = document.querySelectorAll(".btn-category");
@@ -196,6 +211,44 @@
       const matchesCategory = activeCategory === "all" || item.category === activeCategory;
       return matchesSearch && matchesCategory;
     });
+  }
+
+  async function findInventoryItemByBarcode(barcode) {
+    const normalizedBarcode = String(barcode || "").trim();
+    if (!normalizedBarcode) return null;
+
+    const localItem = inventoryItems.find(item => String(item.barcode || "").trim() === normalizedBarcode);
+    if (localItem) return localItem;
+
+    const response = await fetch(`/api/inventory/barcode/${encodeURIComponent(normalizedBarcode)}`, {
+      headers: { Accept: "application/json" }
+    });
+    if (response.status === 404) return null;
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Unable to search barcode.");
+    return payload.item || null;
+  }
+
+  async function addBarcodeToCart(barcode) {
+    const normalizedBarcode = String(barcode || "").trim();
+    if (!normalizedBarcode) return;
+
+    try {
+      const item = await findInventoryItemByBarcode(normalizedBarcode);
+      if (!item || item.status === "Out of Stock") {
+        showSalesAlert("warning", "Product not found.");
+        return;
+      }
+
+      if (!inventoryItems.some(entry => entry.id === item.id)) {
+        inventoryItems.push(item);
+      }
+      addItemToCart(item.id, 1);
+      salesBarcodeInput.value = "";
+      setCartOpen(true);
+    } catch (error) {
+      showSalesAlert("danger", error.message || "Unable to search barcode.");
+    }
   }
 
   function renderSuggestions() {
@@ -331,6 +384,27 @@
 
   // Event Listeners
   searchInput.addEventListener("input", renderSuggestions);
+  const salesBarcodeScanner = new BarcodeScanner({ modalId: "salesBarcodeScannerModal" });
+
+  if (salesScanProductButton) {
+    salesScanProductButton.addEventListener("click", () => {
+      salesBarcodeScanner.open({
+        title: "Scan Product Barcode",
+        onScan: (barcode) => {
+          salesBarcodeInput.value = barcode;
+          addBarcodeToCart(barcode);
+        }
+      });
+    });
+  }
+
+  if (salesBarcodeInput) {
+    salesBarcodeInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      addBarcodeToCart(salesBarcodeInput.value);
+    });
+  }
 
   categoryButtons.forEach(btn => {
     btn.addEventListener("click", () => {

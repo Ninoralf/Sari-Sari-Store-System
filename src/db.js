@@ -118,6 +118,7 @@ function createSchema() {
     );
     CREATE TABLE IF NOT EXISTS inventory_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      barcode TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
       category TEXT NOT NULL,
       supplier TEXT NOT NULL DEFAULT '',
@@ -294,6 +295,84 @@ function ensureInventorySchema() {
     for (const item of existingItems) {
       updateStatus.run(deriveLegacyStatus(item.stock_quantity, item.reorder_level), item.id);
     }
+  }
+
+  ensureInventoryBarcodeSchema();
+}
+
+function normalizeBarcode(value) {
+  return String(value || "").trim();
+}
+
+function legacyBarcodeForItem(item) {
+  return `LEGACY-${item.id}`;
+}
+
+function seedBarcodeForItem(item, index) {
+  const source = `${item.name || "ITEM"}-${index + 1}`.toUpperCase();
+  const compact = source.replace(/[^A-Z0-9]/g, "").slice(0, 18) || `ITEM${index + 1}`;
+  return `SEED-${compact}`;
+}
+
+function ensureInventoryBarcodeSchema() {
+  const columns = db.prepare("PRAGMA table_info(inventory_items)").all();
+  const columnNames = new Set(columns.map((column) => column.name));
+
+  if (!columnNames.has("barcode")) {
+    db.exec("ALTER TABLE inventory_items ADD COLUMN barcode TEXT");
+  }
+
+  const items = db.prepare("SELECT id, barcode FROM inventory_items ORDER BY id").all();
+  const usedBarcodes = new Set();
+  const updateBarcode = db.prepare("UPDATE inventory_items SET barcode = ? WHERE id = ?");
+
+  for (const item of items) {
+    let barcode = normalizeBarcode(item.barcode);
+    if (!barcode || usedBarcodes.has(barcode)) {
+      barcode = legacyBarcodeForItem(item);
+      while (usedBarcodes.has(barcode)) barcode = `${legacyBarcodeForItem(item)}-${usedBarcodes.size + 1}`;
+      updateBarcode.run(barcode, item.id);
+    }
+    usedBarcodes.add(barcode);
+  }
+
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_items_barcode_unique ON inventory_items(barcode)");
+
+  const tableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'inventory_items'").get()?.sql || "";
+  if (/barcode\s+TEXT\s+NOT\s+NULL\s+UNIQUE/i.test(tableSql)) return;
+
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec("BEGIN");
+  try {
+    db.exec(`
+      CREATE TABLE inventory_items_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barcode TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL,
+        supplier TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'In Stock',
+        stock_quantity INTEGER NOT NULL DEFAULT 0,
+        unit_price REAL NOT NULL DEFAULT 0,
+        selling_price REAL NOT NULL DEFAULT 0,
+        reorder_level INTEGER NOT NULL DEFAULT 10,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      INSERT INTO inventory_items_new
+        (id, barcode, name, category, supplier, status, stock_quantity, unit_price, selling_price, reorder_level, created_at)
+      SELECT
+        id, barcode, name, category, supplier, status, stock_quantity, unit_price, selling_price, reorder_level, created_at
+      FROM inventory_items;
+      DROP TABLE inventory_items;
+      ALTER TABLE inventory_items_new RENAME TO inventory_items;
+      CREATE UNIQUE INDEX idx_inventory_items_barcode_unique ON inventory_items(barcode);
+    `);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
   }
 }
 
@@ -817,10 +896,10 @@ function seedDefaults() {
   }
 
   if (!db.prepare("SELECT COUNT(*) AS count FROM inventory_items").get().count) {
-    const insertItem = db.prepare(`INSERT INTO inventory_items (name, category, supplier, stock_quantity, unit_price, selling_price, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+    const insertItem = db.prepare(`INSERT INTO inventory_items (barcode, name, category, supplier, stock_quantity, unit_price, selling_price, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
     const insertMany = withTransaction((items) => {
-      for (const item of items) {
-        insertItem.run(item.name, item.category, item.supplier || "", item.stockQuantity, item.unitPrice, item.sellingPrice, item.reorderLevel);
+      for (const [index, item] of items.entries()) {
+        insertItem.run(seedBarcodeForItem(item, index), item.name, item.category, item.supplier || "", item.stockQuantity, item.unitPrice, item.sellingPrice, item.reorderLevel);
       }
     });
     insertMany(seedInventoryItems);
@@ -842,13 +921,13 @@ function seedMissingInventoryItems() {
     db.prepare("SELECT name FROM inventory_items").all()
       .map((row) => String(row.name || "").trim().toLowerCase())
   );
-  const insertItem = db.prepare(`INSERT INTO inventory_items (name, category, supplier, stock_quantity, unit_price, selling_price, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+  const insertItem = db.prepare(`INSERT INTO inventory_items (barcode, name, category, supplier, stock_quantity, unit_price, selling_price, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
   const missingItems = seedInventoryItems.filter((item) => !existingNames.has(String(item.name || "").trim().toLowerCase()));
   if (!missingItems.length) return;
 
   const insertMany = withTransaction((items) => {
-    for (const item of items) {
-      insertItem.run(item.name, item.category, item.supplier || "", item.stockQuantity, item.unitPrice, item.sellingPrice, item.reorderLevel);
+    for (const [index, item] of items.entries()) {
+      insertItem.run(seedBarcodeForItem(item, index), item.name, item.category, item.supplier || "", item.stockQuantity, item.unitPrice, item.sellingPrice, item.reorderLevel);
     }
   });
   insertMany(missingItems);
@@ -1120,9 +1199,9 @@ export function listInventory(search = "", status = "all") {
   const items = db.prepare(`
     SELECT *
     FROM inventory_items
-    WHERE name LIKE ? OR category LIKE ? OR supplier LIKE ?
+    WHERE name LIKE ? OR category LIKE ? OR supplier LIKE ? OR barcode LIKE ?
     ORDER BY name
-  `).all(pattern, pattern, pattern).map((row) => ({
+  `).all(pattern, pattern, pattern, pattern).map((row) => ({
     ...row,
     status: normalizeItemStatus(row.status),
     profit: row.selling_price - row.unit_price
@@ -1146,25 +1225,49 @@ export function getInventorySummary() {
 }
 
 export function addInventoryItem(input) {
+  const barcode = normalizeBarcode(input.barcode);
+  if (!barcode) throw new Error("Barcode is required.");
+  if (db.prepare("SELECT 1 FROM inventory_items WHERE barcode = ?").get(barcode)) {
+    throw new Error("Barcode already exists.");
+  }
+
   const category = String(input.category || "").trim();
   if (!category) throw new Error("Category is required.");
   if (!db.prepare("SELECT 1 FROM categories WHERE category_name = ?").get(category)) {
     throw new Error("Choose a valid category from Settings.");
   }
 
-  db.prepare(`INSERT INTO inventory_items (name, category, supplier, status, stock_quantity, unit_price, selling_price, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(input.name, category, String(input.supplier || "").trim(), normalizeItemStatus(input.status), 0, Number(input.unitPrice), Number(input.sellingPrice), 0);
+  db.prepare(`INSERT INTO inventory_items (barcode, name, category, supplier, status, stock_quantity, unit_price, selling_price, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(barcode, input.name, category, String(input.supplier || "").trim(), normalizeItemStatus(input.status), 0, Number(input.unitPrice), Number(input.sellingPrice), 0);
 }
 
 export function updateInventoryItem(id, input) {
+  const barcode = normalizeBarcode(input.barcode);
+  if (!barcode) throw new Error("Barcode is required.");
+  if (db.prepare("SELECT 1 FROM inventory_items WHERE barcode = ? AND id != ?").get(barcode, id)) {
+    throw new Error("Barcode already exists.");
+  }
+
   const category = String(input.category || "").trim();
   if (!category) throw new Error("Category is required.");
   if (!db.prepare("SELECT 1 FROM categories WHERE category_name = ?").get(category)) {
     throw new Error("Choose a valid category from Settings.");
   }
 
-  db.prepare(`UPDATE inventory_items SET name = ?, category = ?, supplier = ?, status = ?, stock_quantity = ?, unit_price = ?, selling_price = ?, reorder_level = ? WHERE id = ?`)
-    .run(input.name, category, String(input.supplier || "").trim(), normalizeItemStatus(input.status), 0, Number(input.unitPrice), Number(input.sellingPrice), 0, id);
+  db.prepare(`UPDATE inventory_items SET barcode = ?, name = ?, category = ?, supplier = ?, status = ?, stock_quantity = ?, unit_price = ?, selling_price = ?, reorder_level = ? WHERE id = ?`)
+    .run(barcode, input.name, category, String(input.supplier || "").trim(), normalizeItemStatus(input.status), 0, Number(input.unitPrice), Number(input.sellingPrice), 0, id);
+}
+
+export function getInventoryItemByBarcode(barcode) {
+  const normalizedBarcode = normalizeBarcode(barcode);
+  if (!normalizedBarcode) return null;
+  const item = db.prepare("SELECT * FROM inventory_items WHERE barcode = ?").get(normalizedBarcode);
+  if (!item) return null;
+  return {
+    ...item,
+    status: normalizeItemStatus(item.status),
+    profit: item.selling_price - item.unit_price
+  };
 }
 
 export function deleteInventoryItem(id) {

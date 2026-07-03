@@ -2246,4 +2246,107 @@ body[data-theme="Dark Mode"] .btn-white {
   color: #ffffff;
 }
 
+/* Barcode scanner */
+.barcode-scanner-modal .modal-content {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(16, 185, 129, 0.22), transparent 32%),
+    linear-gradient(145deg, #071411, #10211d 58%, #06100e);
+  color: #f4fff9;
+}
+
+.barcode-scanner-modal .mini-note,
+.barcode-scanner-modal .form-label {
+  color: rgba(244, 255, 249, 0.72);
+}
+
+.barcode-scanner-modal .form-select {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #f4fff9;
+}
+
+.barcode-scanner-modal .form-select option {
+  color: #10211d;
+}
+
+.barcode-scanner-viewfinder {
+  position: relative;
+  width: 100%;
+  min-height: 320px;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid rgba(52, 211, 153, 0.42);
+  border-radius: 0.85rem;
+  background: #020706;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.barcode-scanner-viewfinder video,
+.barcode-scanner-viewfinder canvas {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+}
+
+.barcode-scanner-viewfinder::before {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  z-index: 4;
+  border: 2px solid rgba(52, 211, 153, 0.86);
+  border-radius: 0.65rem;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.22);
+  pointer-events: none;
+}
+
+.barcode-scanner-viewfinder::after {
+  content: "";
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  top: 18%;
+  z-index: 5;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #34d399, transparent);
+  animation: barcodeScanLine 2.1s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.barcode-scan-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.5rem;
+}
+
+.sales-barcode-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+}
+
+.sales-scan-button {
+  min-width: 170px;
+}
+
+@keyframes barcodeScanLine {
+  0%, 100% { transform: translateY(0); opacity: 0.45; }
+  50% { transform: translateY(180px); opacity: 1; }
+}
+
+@media (max-width: 575.98px) {
+  .barcode-scanner-viewfinder {
+    min-height: 55vh;
+    border-radius: 0;
+  }
+
+  .barcode-scan-actions,
+  .sales-barcode-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .sales-scan-button {
+    width: 100%;
+  }
+}
+
 

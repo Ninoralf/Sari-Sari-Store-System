@@ -70,12 +70,13 @@
         </div>
 
         <!-- Filters -->
-        <div class="row g-2 mb-4">
+        <div class="row g-2 mb-2" id="inventoryFilterForm">
           <div class="col-md-7">
             <div class="input-group shadow-sm rounded-3 overflow-hidden border">
               <span class="input-group-text border-0 bg-white"><i class="bi bi-search text-muted"></i></span>
-              <input class="form-control border-0" id="inventoryLiveSearch" placeholder="Search by name, category, or supplier...">
+              <input class="form-control border-0" id="inventoryLiveSearch" placeholder="Search by barcode, name, category, or supplier...">
             </div>
+            <div class="list-group shadow-sm position-absolute d-none mt-1" id="inventorySuggestions" style="z-index: 20;"></div>
           </div>
           <div class="col-md-5">
             <select class="form-select border-0 shadow-sm bg-light" id="inventoryStatusFilter">
@@ -86,6 +87,7 @@
             </select>
           </div>
         </div>
+        <div class="mini-note d-none mb-4" id="inventoryFilterSummary"></div>
 
         <div class="table-responsive">
           <table class="table align-middle table-hover">
@@ -107,6 +109,7 @@
                   <td class="ps-3 py-3">
                     <div class="fw-bold text-dark"><%= item.name %></div>
                     <div class="mini-note text-muted"><%= item.category %> | <%= item.supplier || 'No Supplier' %></div>
+                    <div class="mini-note text-muted">Barcode: <%= item.barcode %></div>
                   </td>
                   <td class="text-end">
                     <div class="fw-bold text-success"><%= formatCurrency(item.selling_price) %></div>
@@ -351,6 +354,16 @@
                 <span class="fw-bold text-uppercase small">Basic Information</span>
               </div>
               <div class="mb-3">
+                <label class="form-label small fw-bold">Barcode</label>
+                <div class="barcode-scan-actions">
+                  <input class="form-control bg-light border-0 py-2 barcode-input" name="barcode" id="addItemBarcode" placeholder="Scan or type barcode" autocomplete="off" required>
+                  <button type="button" class="btn btn-outline-primary barcode-scan-btn" data-barcode-target="addItemBarcode">
+                    <i class="bi bi-upc-scan me-1"></i>Scan Barcode
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary barcode-clear-btn" data-barcode-target="addItemBarcode">Clear</button>
+                </div>
+              </div>
+              <div class="mb-3">
                 <label class="form-label small fw-bold">Item Name</label>
                 <input class="form-control bg-light border-0 py-2" name="name" placeholder="e.g. Coca-Cola 1.5L" required>
               </div>
@@ -437,6 +450,16 @@
                 <span class="fw-bold text-uppercase small">Basic Information</span>
               </div>
               <div class="mb-3">
+                <label class="form-label small fw-bold">Barcode</label>
+                <div class="barcode-scan-actions">
+                  <input class="form-control bg-light border-0 py-2 barcode-input" name="barcode" id="editItemBarcode-<%= item.id %>" value="<%= item.barcode %>" placeholder="Scan or type barcode" autocomplete="off" required>
+                  <button type="button" class="btn btn-outline-primary barcode-scan-btn" data-barcode-target="editItemBarcode-<%= item.id %>">
+                    <i class="bi bi-upc-scan me-1"></i>Scan Barcode
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary barcode-clear-btn" data-barcode-target="editItemBarcode-<%= item.id %>">Clear</button>
+                </div>
+              </div>
+              <div class="mb-3">
                 <label class="form-label small fw-bold">Item Name</label>
                 <input class="form-control bg-light border-0 py-2" name="name" value="<%= item.name %>" required>
               </div>
@@ -504,7 +527,10 @@
 <% }) %>
 <% } %>
 <datalist id="supplierList"><% suppliers.forEach((supplier) => { %><option value="<%= supplier.supplier_name %>"></option><% }) %></datalist>
+<%- include("partials/barcode-scanner-modal", { scannerModalId: "barcodeScannerModal" }) %>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="/js/barcode-scanner.js"></script>
 <script>
   const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
   const csrfToken = "<%= csrfToken %>";
@@ -531,6 +557,7 @@
   }
 
   function renderInventorySuggestions(items) {
+    if (!inventorySearch || !inventorySuggestions) return;
     const query = inventorySearch.value.trim();
     if (!query || !items.length) {
       inventorySuggestions.innerHTML = "";
@@ -548,6 +575,7 @@
   }
 
   function renderInventoryRows(items) {
+    if (!inventoryTableBody) return;
     if (!items.length) {
       inventoryTableBody.innerHTML = `<tr id="inventoryEmptyRow"><td colspan="4" class="text-center py-4 mini-note">No inventory items matched the current filters.</td></tr>`;
       return;
@@ -558,6 +586,7 @@
         <td class="ps-3 py-3">
           <div class="fw-bold text-dark">${escapeHtml(item.name)}</div>
           <div class="mini-note text-muted">${escapeHtml(item.category)} | ${escapeHtml(item.supplier || "No Supplier")}</div>
+          <div class="mini-note text-muted">Barcode: ${escapeHtml(item.barcode)}</div>
         </td>
         <td class="text-end">
           <div class="fw-bold text-success">${peso.format(item.selling_price)}</div>
@@ -586,6 +615,7 @@
   }
 
   function updateInventorySummary(count) {
+    if (!inventorySearch || !inventoryStatus || !inventorySummary) return;
     const query = inventorySearch.value.trim();
     const status = inventoryStatus.value;
     if (query || status !== "all") {
@@ -598,6 +628,7 @@
   }
 
   function updateInventoryCards(summary) {
+    if (!inventorySummaryTotal || !inventorySummaryInStock || !inventorySummaryLowStock || !inventorySummaryOutOfStock) return;
     inventorySummaryTotal.textContent = String(summary.total);
     inventorySummaryInStock.textContent = String(summary.inStock);
     inventorySummaryLowStock.textContent = String(summary.lowStock);
@@ -605,6 +636,7 @@
   }
 
   async function loadInventoryResults() {
+    if (!inventorySearch || !inventoryStatus || !inventoryTableBody) return;
     inventoryFetchController?.abort();
     inventoryFetchController = new AbortController();
     const params = new URLSearchParams({
@@ -633,39 +665,67 @@
   }
 
   let inventorySearchTimer;
-  inventorySearch.addEventListener("input", () => {
+  if (inventorySearch) inventorySearch.addEventListener("input", () => {
     window.clearTimeout(inventorySearchTimer);
     inventorySearchTimer = window.setTimeout(loadInventoryResults, 160);
   });
-  inventoryStatus.addEventListener("change", loadInventoryResults);
-  inventoryPrintButton.addEventListener("click", () => {
+  if (inventoryStatus) inventoryStatus.addEventListener("change", loadInventoryResults);
+  if (inventoryPrintButton) inventoryPrintButton.addEventListener("click", () => {
     const params = new URLSearchParams({
       search: inventorySearch.value.trim(),
       status: inventoryStatus.value
     });
     window.open(`/inventory/print?${params.toString()}`, "_blank", "noopener");
   });
-  inventorySuggestions.addEventListener("click", (event) => {
+  if (inventorySuggestions) inventorySuggestions.addEventListener("click", (event) => {
     const button = event.target.closest("[data-item-name]");
     if (!button) return;
     inventorySearch.value = button.dataset.itemName;
     loadInventoryResults();
     inventorySuggestions.classList.add("d-none");
   });
-  inventorySearch.addEventListener("keydown", (event) => {
+  if (inventorySearch) inventorySearch.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
       loadInventoryResults();
-      inventorySuggestions.classList.add("d-none");
+      inventorySuggestions?.classList.add("d-none");
     }
   });
   document.addEventListener("click", (event) => {
-    if (!event.target.closest("#inventoryFilterForm")) inventorySuggestions.classList.add("d-none");
+    if (!event.target.closest("#inventoryFilterForm")) inventorySuggestions?.classList.add("d-none");
   });
   document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
     bootstrap.Tooltip.getOrCreateInstance(element);
   });
-  loadInventoryResults();
+  const inventoryBarcodeScanner = new BarcodeScanner({ modalId: "barcodeScannerModal" });
+  document.addEventListener("click", (event) => {
+    const scanButton = event.target.closest(".barcode-scan-btn");
+    const clearButton = event.target.closest(".barcode-clear-btn");
+
+    if (scanButton) {
+      const input = document.getElementById(scanButton.dataset.barcodeTarget);
+      if (!input) return;
+      inventoryBarcodeScanner.open({
+        title: "Scan Product Barcode",
+        onScan: (barcode) => {
+          input.value = barcode;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.focus();
+        }
+      });
+      return;
+    }
+
+    if (clearButton) {
+      const input = document.getElementById(clearButton.dataset.barcodeTarget);
+      if (!input) return;
+      input.value = "";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.focus();
+    }
+  });
+
+  if (inventorySearch && inventoryStatus && inventoryTableBody) loadInventoryResults();
 </script>
 </body>
 </html>

@@ -2,7 +2,19 @@
 
 All notable changes to the Sari-Sari Store Management System are documented here.
 
-This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.5.3`.
+This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.6.0`.
+
+## [1.6.0] - 2026-07-03
+
+### What's New
+- Production Barcode Scanning: Added a shared camera scanner for Inventory and Sales using `html5-qrcode` with desktop webcam and Android camera support.
+- Inventory Barcode Workflow: Added required barcode fields with scan and clear actions for Add/Edit Item, plus duplicate barcode protection.
+- Sales Barcode Workflow: Added a large Scan Product action and manual barcode entry that both add matching products directly to the cart.
+- Camera Handling: Added camera selection, automatic stop on scan or close, and safer cleanup to prevent leaked streams.
+
+### Changed
+- Inventory search now considers barcodes alongside name, category, and supplier.
+- Existing inventory rows were backfilled with unique legacy barcodes during migration so the new required field could be enforced.
 
 ## [1.5.3] - 2026-06-18
 

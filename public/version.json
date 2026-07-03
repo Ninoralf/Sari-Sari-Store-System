@@ -1,10 +1,10 @@
 {
-  "version": "1.5.3",
+  "version": "1.6.0",
   "changes": [
-    "FIXES",
-    " Fixed Dark Mode visibility issues on the E-load tab and across the system.",
-    " Overrode .bg-light in Dark Mode to ensure text remains legible.",
-    " Implemented theme-aware .btn-white utility for consistent styling across modes.",
-    " Fixed invisible text for service type choices and view toggles when using Dark Mode."
+    "What's New",
+    " Added a reusable barcode scanner for Inventory and Sales.",
+    " Inventory now requires unique barcodes for new and edited products.",
+    " Sales can scan or type a barcode to add a product directly to the cart.",
+    " Added mobile and desktop camera support with camera selection and cleanup handling."
   ]
 }
