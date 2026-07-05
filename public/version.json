@@ -1,10 +1,10 @@
 {
-  "version": "1.6.0",
+  "version": "1.6.1",
   "changes": [
-    "What's New",
-    " Added a reusable barcode scanner for Inventory and Sales.",
-    " Inventory now requires unique barcodes for new and edited products.",
-    " Sales can scan or type a barcode to add a product directly to the cart.",
-    " Added mobile and desktop camera support with camera selection and cleanup handling."
+    "Changed",
+    " Data reset now clears operational records only and keeps accounts, settings, and configured options.",
+    " Reset All Data now uses an admin confirmation modal with current-password verification.",
+    " Inventory search suggestions were removed to keep the search flow simpler and more focused.",
+    " Related logs, request records, and sales detail rows are now included in data reset cleanup."
   ]
 }

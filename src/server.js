@@ -1072,9 +1072,22 @@ app.get("/settings/backup", requireAuth, requireAdmin, (req, res) => {
 });
 
 app.post("/settings/reset", requireAuth, requireAdmin, (req, res) => {
+  const currentUser = getUserById(req.session.user.id);
+  const currentPassword = String(req.body.currentPassword || "");
+
+  if (!currentPassword) {
+    setFlash(req, "danger", "Enter your current admin password to continue.");
+    return res.redirect("/settings?tab=data");
+  }
+
+  if (!currentUser || !verifyPassword(currentPassword, currentUser.password_hash)) {
+    setFlash(req, "danger", "Incorrect admin password. Data reset was canceled.");
+    return res.redirect("/settings?tab=data");
+  }
+
   resetAllData();
-  setFlash(req, "warning", "All data reset to the seeded Figma sample content.");
-  res.redirect("/settings");
+  setFlash(req, "success", "All application records were permanently deleted. Accounts, settings, and configuration were kept intact.");
+  res.redirect("/settings?tab=data");
 });
 
 app.use((req, res) => {

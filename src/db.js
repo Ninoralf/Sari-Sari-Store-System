@@ -1673,19 +1673,28 @@ export function getDatabasePath() {
 
 export function resetAllData() {
   db.exec(`
+    BEGIN;
+    DELETE FROM sale_digital_items;
     DELETE FROM sale_items;
     DELETE FROM sales;
+    DELETE FROM Selling_Log_Items;
+    DELETE FROM Products_Log;
+    DELETE FROM GCash_Log;
+    DELETE FROM ELoad_Log;
+    DELETE FROM digital_service_requests;
     DELETE FROM inventory_items;
-    DELETE FROM eload_promos;
-    DELETE FROM eload_networks;
-    DELETE FROM suppliers;
-    DELETE FROM categories;
-    DELETE FROM store_settings;
-    DELETE FROM users;
-    DELETE FROM sqlite_sequence;
+    DELETE FROM sqlite_sequence
+      WHERE name IN (
+        'sale_digital_items',
+        'sale_items',
+        'sales',
+        'Selling_Log_Items',
+        'Products_Log',
+        'GCash_Log',
+        'ELoad_Log',
+        'digital_service_requests',
+        'inventory_items'
+      );
+    COMMIT;
   `);
-  seedDefaults();
-  seedSuppliersFromInventory();
-  seedCategoriesFromInventory();
-  seedEloadSettings();
 }

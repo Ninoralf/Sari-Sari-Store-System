@@ -303,7 +303,7 @@
             <div class="row g-3">
               <div class="col-md-6"><div class="border rounded-4 p-4 h-100"><div class="fw-semibold mb-2">Export Data</div><p class="mini-note">Download your inventory or sales records as CSV.</p><div class="d-flex gap-2"><a class="btn btn-outline-primary" href="/settings/export/inventory.csv">Inventory CSV</a><a class="btn btn-outline-primary" href="/settings/export/sales.csv">Sales CSV</a></div></div></div>
               <div class="col-md-6"><div class="border rounded-4 p-4 h-100"><div class="fw-semibold mb-2">Backup Database</div><p class="mini-note">Download the SQLite database file directly.</p><a class="btn btn-outline-success" href="/settings/backup">Create Backup</a></div></div>
-              <div class="col-12"><div class="border border-danger rounded-4 p-4"><div class="fw-semibold text-danger mb-2">Reset Data</div><p class="mini-note">Restore the seeded sample content from the Figma concept. This cannot be undone.</p><form method="post" action="/settings/reset" onsubmit="return confirm('Reset all data to the sample content?');"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="btn btn-danger">Reset All Data</button></form></div></div>
+              <div class="col-12"><div class="border border-danger rounded-4 p-4"><div class="fw-semibold text-danger mb-2">Reset Data</div><p class="mini-note">Permanently delete all application records while keeping accounts, store settings, and configured options intact. This cannot be undone.</p><button class="btn btn-danger" type="button" data-bs-toggle="modal" data-bs-target="#resetAllDataModal">Reset All Data</button></div></div>
             </div>
           </div>
         </div>
@@ -314,6 +314,34 @@
   </main>
 </div>
 <% if (user && user.role === "Admin") { %>
+<div class="modal fade" id="resetAllDataModal" tabindex="-1" aria-labelledby="resetAllDataModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="/settings/reset">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="modal-header">
+          <h5 class="modal-title" id="resetAllDataModalLabel">Confirm Data Reset</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="border border-danger rounded-4 p-3 mb-3 bg-danger-subtle">
+            <div class="fw-semibold text-danger mb-1">This action is irreversible.</div>
+            <div class="mini-note text-danger mb-0">All inventory records, sales history, logs, and service requests will be permanently deleted. User accounts, store settings, and configured reference data will remain.</div>
+          </div>
+          <div class="mb-0">
+            <label class="form-label" for="resetCurrentPassword">Current Admin Password</label>
+            <input class="form-control" id="resetCurrentPassword" type="password" name="currentPassword" autocomplete="current-password" required>
+            <div class="mini-note mt-2">Enter the password for the currently logged-in admin account to continue.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-danger">Permanently Reset Data</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 <div class="modal fade" id="addEloadNetworkModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">

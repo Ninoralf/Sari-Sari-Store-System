@@ -76,7 +76,6 @@
               <span class="input-group-text border-0 bg-white"><i class="bi bi-search text-muted"></i></span>
               <input class="form-control border-0" id="inventoryLiveSearch" placeholder="Search by barcode, name, category, or supplier...">
             </div>
-            <div class="list-group shadow-sm position-absolute d-none mt-1" id="inventorySuggestions" style="z-index: 20;"></div>
           </div>
           <div class="col-md-5">
             <select class="form-select border-0 shadow-sm bg-light" id="inventoryStatusFilter">
@@ -538,7 +537,6 @@
   const inventorySearch = document.getElementById("inventoryLiveSearch");
   const inventoryStatus = document.getElementById("inventoryStatusFilter");
   const inventoryTableBody = document.getElementById("inventoryTableBody");
-  const inventorySuggestions = document.getElementById("inventorySuggestions");
   const inventorySummary = document.getElementById("inventoryFilterSummary");
   const inventoryPrintButton = document.getElementById("inventoryPrintButton");
   const inventorySummaryTotal = document.getElementById("inventorySummaryTotal");
@@ -546,6 +544,7 @@
   const inventorySummaryLowStock = document.getElementById("inventorySummaryLowStock");
   const inventorySummaryOutOfStock = document.getElementById("inventorySummaryOutOfStock");
   let inventoryFetchController;
+  let inventorySearchTimer;
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -554,24 +553,6 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
-  }
-
-  function renderInventorySuggestions(items) {
-    if (!inventorySearch || !inventorySuggestions) return;
-    const query = inventorySearch.value.trim();
-    if (!query || !items.length) {
-      inventorySuggestions.innerHTML = "";
-      inventorySuggestions.classList.add("d-none");
-      return;
-    }
-
-    inventorySuggestions.innerHTML = items.slice(0, 6).map((item) => `
-      <button type="button" class="list-group-item list-group-item-action pos-suggestion" data-item-name="${escapeHtml(item.name)}">
-        <div class="fw-semibold">${escapeHtml(item.name)}</div>
-        <div class="mini-note">${canManageInventory ? `${escapeHtml(item.category)} | ${escapeHtml(item.supplier || "N/A")} | ${escapeHtml(item.status)}` : `${escapeHtml(item.category)} | ${escapeHtml(item.status)}`}</div>
-      </button>
-    `).join("");
-    inventorySuggestions.classList.remove("d-none");
   }
 
   function renderInventoryRows(items) {
@@ -652,7 +633,6 @@
       if (!response.ok) throw new Error("Failed to load inventory.");
       const payload = await response.json();
       renderInventoryRows(payload.items);
-      renderInventorySuggestions(payload.items);
       updateInventoryCards(payload.summary);
       updateInventorySummary(payload.count);
       const url = new URL(window.location.href);
@@ -664,7 +644,6 @@
     }
   }
 
-  let inventorySearchTimer;
   if (inventorySearch) inventorySearch.addEventListener("input", () => {
     window.clearTimeout(inventorySearchTimer);
     inventorySearchTimer = window.setTimeout(loadInventoryResults, 160);
@@ -677,22 +656,11 @@
     });
     window.open(`/inventory/print?${params.toString()}`, "_blank", "noopener");
   });
-  if (inventorySuggestions) inventorySuggestions.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-item-name]");
-    if (!button) return;
-    inventorySearch.value = button.dataset.itemName;
-    loadInventoryResults();
-    inventorySuggestions.classList.add("d-none");
-  });
   if (inventorySearch) inventorySearch.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
       loadInventoryResults();
-      inventorySuggestions?.classList.add("d-none");
     }
-  });
-  document.addEventListener("click", (event) => {
-    if (!event.target.closest("#inventoryFilterForm")) inventorySuggestions?.classList.add("d-none");
   });
   document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
     bootstrap.Tooltip.getOrCreateInstance(element);

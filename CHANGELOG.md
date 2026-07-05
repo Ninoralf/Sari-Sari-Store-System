@@ -2,7 +2,18 @@
 
 All notable changes to the Sari-Sari Store Management System are documented here.
 
-This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.6.0`.
+This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.6.1`.
+
+## [1.6.1] - 2026-07-04
+
+### Changed
+- Data Reset Scope: Updated the reset flow to permanently clear operational records only, while keeping user accounts, store settings, and configured reference data intact.
+- Reset Confirmation: Replaced the simple browser confirm step with an admin-only confirmation modal that explains exactly what will be deleted.
+- Inventory Search UX: Removed the old live suggestion dropdown from Inventory and kept the faster direct search-and-filter workflow.
+
+### Fixed
+- Reset Audit Safety: The reset action now requires the current admin password before any records are deleted.
+- Reset Data Coverage: Added deletion of related sales detail rows, logs, and digital service requests so operational data is cleared more completely.
 
 ## [1.6.0] - 2026-07-03
 
