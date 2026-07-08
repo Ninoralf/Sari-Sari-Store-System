@@ -2,7 +2,31 @@
 
 All notable changes to the Sari-Sari Store Management System are documented here.
 
-This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.6.2`.
+This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.7.0`.
+
+## [1.7.0] - 2026-07-09
+
+### What's New
+- Introduced a persistent SQLite-backed session store, replacing the default in-memory session storage.
+- Added SQL views for reporting, allowing dashboards and historical views to derive data from canonical sales records.
+- Added isolated smoke-test database support through `STORE_DB_PATH` for safer automated testing.
+
+### Changed
+- Refactored reporting to use `sales`, `sale_items`, and `digital_service_requests` as the canonical source of truth.
+- Product, GCash, and E-Load log views are now generated from canonical data instead of maintaining duplicate write operations.
+- Updated smoke tests and project documentation to reflect the current application behavior and deployment process.
+- Restored `/reports` as a compatibility redirect to the Dashboard.
+
+### Security
+- Replaced Express MemoryStore with a persistent SQLite session store.
+- Added login rate limiting and temporary account lockout protection.
+- Production deployments now require `SESSION_SECRET`.
+- Removed remaining unsafe dynamic HTML rendering paths to reduce stored and reflected XSS risks.
+
+### Fixed
+- Smoke tests now run against isolated temporary databases instead of the live database.
+- Eliminated remaining `COUNT(*) + 1` identifier generation in favor of stable identifiers.
+- Improved compatibility for Docker and Portainer deployments without resetting existing user accounts or data.
 
 ## [1.6.2] - 2026-07-09
 

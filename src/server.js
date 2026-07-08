@@ -6,6 +6,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   addInventoryItem,
+  clearFailedLoginAttempts,
   completeDigitalServiceRequest,
   createCategory,
   createEloadNetwork,
@@ -31,6 +32,7 @@ import {
   getSalesMetrics,
   getStoreSettings,
   getEloadPromoCatalog,
+  getLoginProtectionState,
   getUserAuthById,
   getUserAuthByUsername,
   listDigitalServiceRequests,
@@ -43,6 +45,7 @@ import {
   listSuppliers,
   listSales,
   resetAllData,
+  recordFailedLoginAttempt,
   deleteSupplier,
   updateUserAccount,
   updateUserPin,
@@ -59,6 +62,7 @@ import {
   verifyPassword,
   getInventorySummary
 } from "./db.js";
+import { SQLiteSessionStore } from "./sqlite-session-store.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,9 +70,37 @@ const app = express();
 const port = process.env.PORT || 3000;
 const sessionMaxAgeMs = 30 * 60 * 1000;
 const sessionCookieName = "store.sid";
+const loginRateLimitMessage = "Too many failed sign-in attempts. Please wait a few minutes and try again.";
 
 const versionData = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "public", "version.json"), "utf8"));
 const systemVersion = versionData.version;
+const envFilePath = path.join(__dirname, "..", ".env");
+
+function readEnvValue(name) {
+  if (!fs.existsSync(envFilePath)) return "";
+  const lines = fs.readFileSync(envFilePath, "utf8").split(/\r?\n/);
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const separatorIndex = trimmed.indexOf("=");
+    if (separatorIndex < 0) continue;
+    const key = trimmed.slice(0, separatorIndex).trim();
+    if (key !== name) continue;
+    let value = trimmed.slice(separatorIndex + 1).trim();
+    if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    return value;
+  }
+
+  return "";
+}
+
+const sessionSecret = String(process.env.SESSION_SECRET || readEnvValue("SESSION_SECRET") || "").trim();
+if (process.env.NODE_ENV === "production" && !sessionSecret) {
+  throw new Error("SESSION_SECRET must be set in the environment or .env when NODE_ENV=production.");
+}
 
 await initializeDatabase();
 
@@ -80,9 +112,11 @@ app.set("views", path.join(__dirname, "..", "views"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "..", "public")));
+const sessionStore = new SQLiteSessionStore({ defaultTtlMs: sessionMaxAgeMs });
 app.use(session({
   name: sessionCookieName,
-  secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex"),
+  secret: sessionSecret || crypto.randomBytes(32).toString("hex"),
+  store: sessionStore,
   resave: false,
   saveUninitialized: false,
   rolling: true,
@@ -112,6 +146,10 @@ function clearAuthSession(req) {
   delete req.session.authExpiresAt;
   delete req.session.csrfToken;
   delete req.session.mustChangePassword;
+}
+
+function getLoginRateLimitKey(req) {
+  return String(req.ip || req.socket?.remoteAddress || "unknown").trim().toLowerCase();
 }
 
 function buildNotifications(storeSettings) {
@@ -562,12 +600,23 @@ app.get("/login", (req, res) => {
 });
 
 app.post("/login", async (req, res) => {
-  const { username, password } = req.body;
-  const user = getUserAuthByUsername(username);
-  if (!user || !(await verifyPassword(password, user.password_hash))) {
-    setFlash(req, "danger", "Invalid username or password.");
+  const username = String(req.body.username || "").trim();
+  const password = String(req.body.password || "");
+  const rateLimitKey = getLoginRateLimitKey(req);
+  const protectionState = getLoginProtectionState(username, rateLimitKey);
+
+  if (protectionState.rateLimited || protectionState.accountLocked) {
+    setFlash(req, "danger", loginRateLimitMessage);
     return res.redirect("/login");
   }
+
+  const user = getUserAuthByUsername(username);
+  if (!user || !(await verifyPassword(password, user.password_hash))) {
+    const failedState = recordFailedLoginAttempt(username, rateLimitKey);
+    setFlash(req, "danger", (failedState.rateLimited || failedState.accountLocked) ? loginRateLimitMessage : "Invalid username or password.");
+    return res.redirect("/login");
+  }
+  clearFailedLoginAttempts(username, rateLimitKey);
   return req.session.regenerate(() => {
     setAuthSession(req, user.id, user.must_change_password);
     if (user.must_change_password) {
@@ -792,6 +841,10 @@ app.get("/logs", requireAuth, (req, res) => {
     formatCurrency,
     formatDateTime
   });
+});
+
+app.get("/reports", requireAuth, (req, res) => {
+  res.redirect("/");
 });
 
 app.get("/best-selling", requireAuth, requireAdmin, (req, res) => {

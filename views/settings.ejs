@@ -217,7 +217,12 @@
 
               function showSavedAlert() {
                 if (!browserAlert) return;
-                browserAlert.innerHTML = '<div class="alert alert-success mb-0" role="alert">Appearance preferences saved in this browser for this account.</div>';
+                browserAlert.replaceChildren();
+                const alert = document.createElement("div");
+                alert.className = "alert alert-success mb-0";
+                alert.setAttribute("role", "alert");
+                alert.textContent = "Appearance preferences saved in this browser for this account.";
+                browserAlert.appendChild(alert);
               }
 
               if (!form || !scaleRange || !scaleValue) return;

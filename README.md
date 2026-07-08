@@ -12,7 +12,8 @@ This project is a Bootstrap-based Sari-Sari Store Management System built with E
 - Dashboard with sales and inventory overview
 - Inventory management
 - Sales recording
-- Reports and best-selling products view
+- eLoad and GCash request management
+- Logs, exports, backup, and safe data reset tools
 - Settings page for store profile, notifications, appearance, export, backup, and reset
 - Seeded demo data for quick local testing
 
@@ -70,20 +71,25 @@ http://localhost:3000
 Open that URL in your browser, then sign in with the default demo account:
 
 - Username: `admin`
-- Password: `admin123`
+- Password: set `ADMIN_PASSWORD` in `.env` or your environment to control the seeded admin password
+
+If `ADMIN_PASSWORD` is not provided on a fresh database, the app falls back to `admin123` and requires an immediate password change after the first login.
 
 ## Environment Variables
 
-These are optional:
+These are supported:
 
 - `PORT` - changes the server port. Default: `3000`
-- `SESSION_SECRET` - custom session secret for local or production-like runs
-- `NODE_ENV` - when set to `production`, secure session cookies are enabled
+- `ADMIN_PASSWORD` - seeded admin password for a fresh database
+- `SESSION_SECRET` - session signing secret. Required when `NODE_ENV=production`
+- `NODE_ENV` - when set to `production`, secure session cookies are enabled and `SESSION_SECRET` must be configured
+- `STORE_DB_PATH` - optional alternate SQLite path, useful for isolated tests or custom deployments
 
 Example:
 
 ```bash
 $env:PORT=4000
+$env:ADMIN_PASSWORD="strong-admin-password"
 $env:SESSION_SECRET="your-secret"
 npm run dev
 ```
@@ -99,6 +105,8 @@ npm run dev
 
 If the database already exists, the app reuses it.
 
+Existing deployments keep their current database and accounts. Startup migrations are designed to be idempotent and backward compatible.
+
 ## Quick Test
 
 Run the smoke test with:
@@ -108,6 +116,7 @@ npm run test:smoke
 ```
 
 This starts the server, checks the login flow, and verifies the main pages and CSV export routes.
+The smoke test uses its own temporary SQLite database so it does not modify your existing local data.
 
 ## Updates And Versions
 
@@ -155,4 +164,5 @@ data/       SQLite database file
 - The app automatically creates the `data` folder if it does not exist.
 - `nodemon` is included as a dev dependency for local development.
 - The Settings page includes export and backup actions.
-- Resetting data from Settings restores the seeded demo content.
+- Resetting data from Settings clears operational records while keeping accounts, settings, and configured reference data.
+- The old Reports and Best Selling pages are kept as compatibility redirects to the Dashboard.

@@ -14,9 +14,22 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-const dbPath = path.join(dataDir, "store.db");
+const configuredDbPath = String(process.env.STORE_DB_PATH || "").trim();
+const dbPath = configuredDbPath
+  ? (path.isAbsolute(configuredDbPath) ? configuredDbPath : path.join(__dirname, "..", configuredDbPath))
+  : path.join(dataDir, "store.db");
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
 export const db = new DatabaseSync(dbPath);
 const envFilePath = path.join(__dirname, "..", ".env");
+const LOGIN_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 10;
+const LOGIN_RATE_LIMIT_BLOCK_MS = 10 * 60 * 1000;
+const LOGIN_ACCOUNT_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_ACCOUNT_MAX_ATTEMPTS = 5;
+const LOGIN_ACCOUNT_LOCK_MS = 15 * 60 * 1000;
 
 function padNumber(value) {
   return String(value).padStart(2, "0");
@@ -132,6 +145,7 @@ function createSchema() {
       transaction_code TEXT NOT NULL UNIQUE,
       sale_date TEXT NOT NULL,
       payment_method TEXT NOT NULL,
+      employee_name TEXT NOT NULL DEFAULT 'System',
       total_amount REAL NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -265,6 +279,18 @@ function createSchema() {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(network_id, promo_name),
       FOREIGN KEY (network_id) REFERENCES eload_networks(network_id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS user_login_security (
+      username TEXT PRIMARY KEY,
+      failed_attempts INTEGER NOT NULL DEFAULT 0,
+      first_failed_at INTEGER,
+      locked_until INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS login_rate_limits (
+      rate_key TEXT PRIMARY KEY,
+      attempt_count INTEGER NOT NULL DEFAULT 0,
+      window_started_at INTEGER NOT NULL,
+      blocked_until INTEGER
     );
   `);
 }
@@ -501,6 +527,91 @@ function ensureDigitalServiceRequestSchema() {
   }
 }
 
+function ensureSalesSchema() {
+  const columns = db.prepare("PRAGMA table_info(sales)").all();
+  const columnNames = new Set(columns.map((column) => column.name));
+
+  if (!columnNames.has("employee_name")) {
+    db.exec("ALTER TABLE sales ADD COLUMN employee_name TEXT NOT NULL DEFAULT 'System'");
+  }
+}
+
+function ensureAuthSecuritySchema() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_login_security (
+      username TEXT PRIMARY KEY,
+      failed_attempts INTEGER NOT NULL DEFAULT 0,
+      first_failed_at INTEGER,
+      locked_until INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS login_rate_limits (
+      rate_key TEXT PRIMARY KEY,
+      attempt_count INTEGER NOT NULL DEFAULT 0,
+      window_started_at INTEGER NOT NULL,
+      blocked_until INTEGER
+    );
+  `);
+}
+
+function ensureReportingViews() {
+  db.exec(`
+    DROP VIEW IF EXISTS report_product_logs;
+    CREATE VIEW report_product_logs AS
+    SELECT
+      s.id AS log_id,
+      s.transaction_code AS transaction_code,
+      s.sale_date AS sale_date,
+      s.employee_name AS employee_name,
+      s.created_at AS time_stamp,
+      COALESCE(SUM(si.total), 0) AS total_amount
+    FROM sales s
+    INNER JOIN sale_items si ON si.sale_id = s.id
+    GROUP BY s.id, s.transaction_code, s.sale_date, s.employee_name, s.created_at;
+
+    DROP VIEW IF EXISTS report_eload_logs;
+    CREATE VIEW report_eload_logs AS
+    SELECT
+      id AS request_id,
+      request_code AS transaction_code,
+      mobile_number AS number,
+      network AS network,
+      COALESCE(load_value, request_kind, '') AS item_name,
+      amount AS amount,
+      COALESCE(completed_by_name, requested_by_name, 'System') AS employee_name,
+      date(datetime(COALESCE(completed_at, requested_at), '+8 hours')) AS sale_date,
+      COALESCE(completed_at, requested_at) AS time_stamp,
+      status,
+      requested_by_name,
+      requested_at,
+      completed_by_name,
+      completed_at,
+      failed_reason
+    FROM digital_service_requests
+    WHERE service_type = 'eload';
+
+    DROP VIEW IF EXISTS report_gcash_logs;
+    CREATE VIEW report_gcash_logs AS
+    SELECT
+      id AS request_id,
+      request_code AS transaction_code,
+      mobile_number AS number,
+      reference_no AS reference_no,
+      request_kind AS request_kind,
+      amount AS amount,
+      COALESCE(completed_by_name, requested_by_name, 'System') AS employee_name,
+      date(datetime(COALESCE(completed_at, requested_at), '+8 hours')) AS sale_date,
+      COALESCE(completed_at, requested_at) AS time_stamp,
+      status,
+      requested_by_name,
+      requested_at,
+      completed_by_name,
+      completed_at,
+      failed_reason
+    FROM digital_service_requests
+    WHERE service_type = 'gcash';
+  `);
+}
+
 function seedSuppliersFromInventory() {
   const existingCount = db.prepare("SELECT COUNT(*) AS count FROM suppliers").get().count;
   if (existingCount) return;
@@ -558,87 +669,6 @@ function seedEloadSettings() {
   insertDefaults();
 }
 
-function syncDigitalRequestLogs() {
-  const requests = db.prepare(`
-    SELECT
-      request_code,
-      service_type,
-      status,
-      mobile_number,
-      amount,
-      request_kind,
-      network,
-      load_value,
-      reference_no,
-      requested_by_name,
-      requested_at,
-      completed_by_name,
-      completed_at
-    FROM digital_service_requests
-    ORDER BY id ASC
-  `).all();
-
-  const gcashRequestCodes = requests
-    .filter((request) => String(request.service_type || "").toLowerCase() === "gcash")
-    .map((request) => String(request.request_code || "").trim())
-    .filter(Boolean);
-  const eloadRequestCodes = requests
-    .filter((request) => String(request.service_type || "").toLowerCase() === "eload")
-    .map((request) => String(request.request_code || "").trim())
-    .filter(Boolean);
-
-  const deleteGcashLog = db.prepare("DELETE FROM GCash_Log WHERE Transaction_Code = ?");
-  const deleteEloadLog = db.prepare("DELETE FROM ELoad_Log WHERE Transaction_Code = ?");
-  const insertGcashLog = db.prepare(`
-    INSERT INTO GCash_Log (Transaction_Code, Number, Reference_No, Cash_IN_OUT, Amount, Emp_Mng, Sale_Date)
-    VALUES (?, ?, ?, 'IN', ?, ?, ?)
-  `);
-  const insertEloadLog = db.prepare(`
-    INSERT INTO ELoad_Log (Transaction_Code, Number, Network, Item_Name, Amount, Emp_Mng, Sale_Date)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const syncTx = withTransaction(() => {
-    gcashRequestCodes.forEach((code) => deleteGcashLog.run(code));
-    eloadRequestCodes.forEach((code) => deleteEloadLog.run(code));
-
-    requests.forEach((request) => {
-      if (String(request.status || "").toLowerCase() !== "completed") return;
-
-      const requestCode = String(request.request_code || "").trim();
-      const serviceType = String(request.service_type || "").toLowerCase();
-      const saleDate = String(request.completed_at || request.requested_at || "").slice(0, 10) || toIsoDate(getTodayDate());
-      const employeeName = String(request.completed_by_name || request.requested_by_name || "System").trim();
-
-      if (serviceType === "gcash") {
-        insertGcashLog.run(
-          requestCode,
-          String(request.mobile_number || "").trim(),
-          String(request.reference_no || "").trim(),
-          Number(request.amount || 0),
-          employeeName,
-          saleDate
-        );
-        return;
-      }
-
-      if (serviceType === "eload") {
-        insertEloadLog.run(
-          requestCode,
-          String(request.mobile_number || "").trim(),
-          String(request.network || "").trim(),
-          String(request.load_value || request.request_kind || "").trim(),
-          Number(request.amount || 0),
-          employeeName,
-          saleDate
-        );
-      }
-    });
-  });
-
-  syncTx();
-}
-
 function buildSaleTransactionCode(saleId) {
   return `S${String(saleId).padStart(4, "0")}`;
 }
@@ -649,17 +679,13 @@ function buildDigitalServiceRequestCode(serviceType, requestId) {
 }
 
 export function createSale({ saleDate, paymentMethod, items, digitalItems = [], skipStockValidation = false, employeeName = "System", number = "", referenceNo = "", requestedByUserId = null, completedByUserId = null }) {
-  const insertSale = db.prepare(`INSERT INTO sales (transaction_code, sale_date, payment_method, total_amount) VALUES (?, ?, ?, ?)`);
+  const insertSale = db.prepare(`INSERT INTO sales (transaction_code, sale_date, payment_method, employee_name, total_amount) VALUES (?, ?, ?, ?, ?)`);
   const updateSaleCode = db.prepare("UPDATE sales SET transaction_code = ? WHERE id = ?");
   const insertSaleItem = db.prepare(`INSERT INTO sale_items (sale_id, inventory_item_id, item_name, quantity, price, total) VALUES (?, ?, ?, ?, ?, ?)`);
   const insertDigitalSaleItem = db.prepare(`
     INSERT INTO sale_digital_items (sale_id, service_type, request_code, mobile_number, network, load_type, load_value, notes, quantity, price, total)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const insertProductsLog = db.prepare(`INSERT INTO Products_Log (Transaction_Code, Total_Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?)`);
-  const insertSellingLogItem = db.prepare(`INSERT INTO Selling_Log_Items (Log_ID, Product_ID, Item_Name, Quantity, Selling_Price) VALUES (?, ?, ?, ?, ?)`);
-  const insertGcashLog = db.prepare(`INSERT INTO GCash_Log (Transaction_Code, Number, Reference_No, Cash_IN_OUT, Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?, ?, ?, ?)`);
-  const insertEloadLog = db.prepare(`INSERT INTO ELoad_Log (Transaction_Code, Number, Network, Item_Name, Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?, ?, ?, ?)`);
   const insertPendingDigitalServiceRequest = db.prepare(`
     INSERT INTO digital_service_requests
     (request_code, service_type, status, mobile_number, amount, request_kind, network, load_type, load_value, reference_no, notes, requested_by_user_id, requested_by_name)
@@ -671,13 +697,11 @@ export function createSale({ saleDate, paymentMethod, items, digitalItems = [], 
     const productSaleItems = Array.isArray(payload.items) ? payload.items : [];
     const digitalSaleItems = Array.isArray(payload.digitalItems) ? payload.digitalItems : [];
     const totalAmount = [...productSaleItems, ...digitalSaleItems].reduce((sum, item) => sum + Number(item.total || 0), 0);
-    const saleResult = insertSale.run(`TMP-${crypto.randomUUID()}`, payload.saleDate, payload.paymentMethod, totalAmount);
+    const activeEmployeeName = String(payload.employeeName || "System").trim() || "System";
+    const saleResult = insertSale.run(`TMP-${crypto.randomUUID()}`, payload.saleDate, payload.paymentMethod, activeEmployeeName, totalAmount);
     const saleId = Number(saleResult.lastInsertRowid);
     const transactionCode = buildSaleTransactionCode(saleId);
     updateSaleCode.run(transactionCode, saleId);
-    const activeEmployeeName = String(payload.employeeName || "System");
-    const productItems = [];
-    const eloadItems = [];
 
     function createPendingDigitalRequest({
       serviceType,
@@ -716,46 +740,6 @@ export function createSale({ saleDate, paymentMethod, items, digitalItems = [], 
         throw new Error(`${currentInventory.name} is marked out of stock.`);
       }
       insertSaleItem.run(saleId, item.inventoryItemId, currentInventory.name, item.quantity, item.price, item.total);
-
-      const category = String(currentInventory.category || "").toLowerCase();
-      const normalizedItem = {
-        inventoryItemId: currentInventory.id,
-        itemName: currentInventory.name,
-        category: currentInventory.category,
-        quantity: item.quantity,
-        price: item.price,
-        total: item.total
-      };
-
-      if (category.includes("load")) {
-        eloadItems.push(normalizedItem);
-      } else {
-        productItems.push(normalizedItem);
-      }
-    }
-
-    if (productItems.length) {
-      const productTotal = productItems.reduce((sum, item) => sum + Number(item.total || 0), 0);
-      const productLogResult = insertProductsLog.run(transactionCode, productTotal, activeEmployeeName, payload.saleDate);
-      for (const item of productItems) {
-        insertSellingLogItem.run(productLogResult.lastInsertRowid, item.inventoryItemId, item.itemName, item.quantity, item.price);
-      }
-    }
-
-    if (String(payload.paymentMethod || "").toLowerCase() === "gcash") {
-      insertGcashLog.run(transactionCode, String(payload.number || ""), String(payload.referenceNo || ""), "IN", totalAmount, activeEmployeeName, payload.saleDate);
-    }
-
-    for (const item of eloadItems) {
-      insertEloadLog.run(
-        transactionCode,
-        String(payload.number || ""),
-        String(item.category || item.itemName || ""),
-        item.itemName,
-        item.total,
-        activeEmployeeName,
-        payload.saleDate
-      );
     }
 
     for (const item of digitalSaleItems) {
@@ -794,7 +778,6 @@ export function createSale({ saleDate, paymentMethod, items, digitalItems = [], 
         price,
         total
       );
-      insertEloadLog.run(transactionCode, mobileNumber, network, loadValue, total, activeEmployeeName, payload.saleDate);
     }
   });
 
@@ -843,7 +826,6 @@ export function completeDigitalServiceRequest(requestId, input) {
     throw new Error("GCash completion requires a reference number.");
   }
   const completedByName = String(input.completedByName || "System").trim();
-  const completedSaleDate = toIsoDate(getTodayDate());
 
   const completeTx = withTransaction(() => {
     db.prepare(`
@@ -859,34 +841,6 @@ export function completeDigitalServiceRequest(requestId, input) {
       input.completedByUserId ? Number(input.completedByUserId) : null,
       completedByName,
       requestId
-    );
-
-    if (serviceType === "gcash") {
-      db.prepare(`
-        INSERT INTO GCash_Log (Transaction_Code, Number, Reference_No, Cash_IN_OUT, Amount, Emp_Mng, Sale_Date)
-        VALUES (?, ?, ?, 'IN', ?, ?, ?)
-      `).run(
-        String(request.request_code || "").trim(),
-        String(request.mobile_number || "").trim(),
-        referenceNo,
-        Number(request.amount || 0),
-        completedByName,
-        completedSaleDate
-      );
-      return;
-    }
-
-    db.prepare(`
-      INSERT INTO ELoad_Log (Transaction_Code, Number, Network, Item_Name, Amount, Emp_Mng, Sale_Date)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      String(request.request_code || "").trim(),
-      String(request.mobile_number || "").trim(),
-      String(request.network || "").trim(),
-      String(request.load_value || request.request_kind || "").trim(),
-      Number(request.amount || 0),
-      completedByName,
-      completedSaleDate
     );
   });
 
@@ -927,61 +881,6 @@ export function listDigitalServiceRequests() {
     ...row,
     amount: Number(row.amount || 0)
   }));
-}
-
-function backfillLogTablesFromSales() {
-  const hasProductLogs = db.prepare("SELECT COUNT(*) AS count FROM Products_Log").get().count > 0;
-  const hasGcashLogs = db.prepare("SELECT COUNT(*) AS count FROM GCash_Log").get().count > 0;
-  const hasEloadLogs = db.prepare("SELECT COUNT(*) AS count FROM ELoad_Log").get().count > 0;
-  if (hasProductLogs || hasGcashLogs || hasEloadLogs) return;
-
-  const sales = listSales("all");
-  const insertProductsLog = db.prepare(`INSERT INTO Products_Log (Transaction_Code, Total_Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?)`);
-  const insertSellingLogItem = db.prepare(`INSERT INTO Selling_Log_Items (Log_ID, Product_ID, Item_Name, Quantity, Selling_Price) VALUES (?, ?, ?, ?, ?)`);
-  const insertGcashLog = db.prepare(`INSERT INTO GCash_Log (Transaction_Code, Number, Reference_No, Cash_IN_OUT, Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?, ?, ?, ?)`);
-  const insertEloadLog = db.prepare(`INSERT INTO ELoad_Log (Transaction_Code, Number, Network, Item_Name, Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?, ?, ?, ?)`);
-
-  withTransaction(() => {
-    sales.forEach((sale) => {
-      const productItems = [];
-      const eloadItems = [];
-
-      sale.items.forEach((item) => {
-        const inventoryItem = db.prepare("SELECT id, category FROM inventory_items WHERE id = ?").get(item.inventory_item_id);
-        const category = String(inventoryItem?.category || "").toLowerCase();
-        const normalizedItem = {
-          inventoryItemId: Number(item.inventory_item_id),
-          itemName: item.item_name,
-          category: inventoryItem?.category || "",
-          quantity: Number(item.quantity || 0),
-          price: Number(item.price || 0),
-          total: Number(item.total || 0)
-        };
-
-        if (category.includes("load")) {
-          eloadItems.push(normalizedItem);
-        } else {
-          productItems.push(normalizedItem);
-        }
-      });
-
-      if (productItems.length) {
-        const productTotal = productItems.reduce((sum, item) => sum + item.total, 0);
-        const productLogResult = insertProductsLog.run(sale.transaction_code, productTotal, "System", sale.sale_date);
-        productItems.forEach((item) => {
-          insertSellingLogItem.run(productLogResult.lastInsertRowid, item.inventoryItemId, item.itemName, item.quantity, item.price);
-        });
-      }
-
-      if (String(sale.payment_method || "").toLowerCase() === "gcash") {
-        insertGcashLog.run(sale.transaction_code, "", "", "IN", Number(sale.total_amount || 0), "System", sale.sale_date);
-      }
-
-      eloadItems.forEach((item) => {
-        insertEloadLog.run(sale.transaction_code, "", String(item.category || item.itemName || ""), item.itemName, item.total, "System", sale.sale_date);
-      });
-    });
-  })();
 }
 
 async function seedDefaults() {
@@ -1087,14 +986,15 @@ export async function initializeDatabase() {
   createSchema();
   ensureUserSchema();
   ensureInventorySchema();
+  ensureSalesSchema();
   ensureDigitalServiceRequestSchema();
+  ensureAuthSecuritySchema();
+  ensureReportingViews();
   await seedDefaults();
   seedMissingInventoryItems();
   seedSuppliersFromInventory();
   seedCategoriesFromInventory();
   seedEloadSettings();
-  backfillLogTablesFromSales();
-  syncDigitalRequestLogs();
 }
 
 export function getUserByUsername(username) {
@@ -1111,6 +1011,132 @@ export function getUserAuthByUsername(username) {
 
 export function getUserAuthById(id) {
   return db.prepare("SELECT id, username, full_name, role, email, phone, password_hash, pin_hash, must_change_password FROM users WHERE id = ?").get(id);
+}
+
+function normalizeLoginIdentity(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizeRateLimitKey(value) {
+  return String(value || "").trim() || "unknown";
+}
+
+export function getLoginProtectionState(username, rateLimitKey, now = Date.now()) {
+  const normalizedUsername = normalizeLoginIdentity(username);
+  const normalizedRateLimitKey = normalizeRateLimitKey(rateLimitKey);
+  const accountState = normalizedUsername
+    ? db.prepare("SELECT failed_attempts, first_failed_at, locked_until FROM user_login_security WHERE username = ?").get(normalizedUsername)
+    : null;
+  const rateLimitState = db.prepare("SELECT attempt_count, window_started_at, blocked_until FROM login_rate_limits WHERE rate_key = ?").get(normalizedRateLimitKey);
+
+  let accountLockedUntil = Number(accountState?.locked_until || 0);
+  let rateLimitedUntil = Number(rateLimitState?.blocked_until || 0);
+
+  if (accountLockedUntil && accountLockedUntil <= now) {
+    db.prepare("DELETE FROM user_login_security WHERE username = ?").run(normalizedUsername);
+    accountLockedUntil = 0;
+  }
+
+  if (rateLimitState) {
+    const windowStartedAt = Number(rateLimitState.window_started_at || 0);
+    if (rateLimitedUntil && rateLimitedUntil <= now) {
+      db.prepare("DELETE FROM login_rate_limits WHERE rate_key = ?").run(normalizedRateLimitKey);
+      rateLimitedUntil = 0;
+    } else if (!rateLimitedUntil && (now - windowStartedAt) > LOGIN_RATE_LIMIT_WINDOW_MS) {
+      db.prepare("DELETE FROM login_rate_limits WHERE rate_key = ?").run(normalizedRateLimitKey);
+    }
+  }
+
+  return {
+    accountLocked: Boolean(accountLockedUntil && accountLockedUntil > now),
+    accountLockedUntil,
+    rateLimited: Boolean(rateLimitedUntil && rateLimitedUntil > now),
+    rateLimitedUntil
+  };
+}
+
+export function recordFailedLoginAttempt(username, rateLimitKey, now = Date.now()) {
+  const normalizedUsername = normalizeLoginIdentity(username);
+  const normalizedRateLimitKey = normalizeRateLimitKey(rateLimitKey);
+
+  const rateLimitState = db.prepare("SELECT attempt_count, window_started_at, blocked_until FROM login_rate_limits WHERE rate_key = ?").get(normalizedRateLimitKey);
+  let attemptCount = 1;
+  let windowStartedAt = now;
+  let blockedUntil = 0;
+
+  if (rateLimitState) {
+    const existingWindowStartedAt = Number(rateLimitState.window_started_at || 0);
+    if ((Number(rateLimitState.blocked_until || 0) > now)) {
+      blockedUntil = Number(rateLimitState.blocked_until);
+      attemptCount = Number(rateLimitState.attempt_count || 0);
+      windowStartedAt = existingWindowStartedAt || now;
+    } else if ((now - existingWindowStartedAt) <= LOGIN_RATE_LIMIT_WINDOW_MS) {
+      attemptCount = Number(rateLimitState.attempt_count || 0) + 1;
+      windowStartedAt = existingWindowStartedAt || now;
+    }
+  }
+
+  if (!blockedUntil && attemptCount >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS) {
+    blockedUntil = now + LOGIN_RATE_LIMIT_BLOCK_MS;
+  }
+
+  db.prepare(`
+    INSERT INTO login_rate_limits (rate_key, attempt_count, window_started_at, blocked_until)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(rate_key) DO UPDATE SET
+      attempt_count = excluded.attempt_count,
+      window_started_at = excluded.window_started_at,
+      blocked_until = excluded.blocked_until
+  `).run(normalizedRateLimitKey, attemptCount, windowStartedAt, blockedUntil || null);
+
+  let accountLockedUntil = 0;
+  if (normalizedUsername) {
+    const accountState = db.prepare("SELECT failed_attempts, first_failed_at, locked_until FROM user_login_security WHERE username = ?").get(normalizedUsername);
+    let failedAttempts = 1;
+    let firstFailedAt = now;
+
+    if (accountState) {
+      const existingFirstFailedAt = Number(accountState.first_failed_at || 0);
+      const existingLockedUntil = Number(accountState.locked_until || 0);
+      if (existingLockedUntil > now) {
+        failedAttempts = Number(accountState.failed_attempts || 0);
+        firstFailedAt = existingFirstFailedAt || now;
+        accountLockedUntil = existingLockedUntil;
+      } else if ((now - existingFirstFailedAt) <= LOGIN_ACCOUNT_WINDOW_MS) {
+        failedAttempts = Number(accountState.failed_attempts || 0) + 1;
+        firstFailedAt = existingFirstFailedAt || now;
+      }
+    }
+
+    if (!accountLockedUntil && failedAttempts >= LOGIN_ACCOUNT_MAX_ATTEMPTS) {
+      accountLockedUntil = now + LOGIN_ACCOUNT_LOCK_MS;
+    }
+
+    db.prepare(`
+      INSERT INTO user_login_security (username, failed_attempts, first_failed_at, locked_until)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(username) DO UPDATE SET
+        failed_attempts = excluded.failed_attempts,
+        first_failed_at = excluded.first_failed_at,
+        locked_until = excluded.locked_until
+    `).run(normalizedUsername, failedAttempts, firstFailedAt, accountLockedUntil || null);
+  }
+
+  return {
+    accountLocked: Boolean(accountLockedUntil && accountLockedUntil > now),
+    accountLockedUntil,
+    rateLimited: Boolean(blockedUntil && blockedUntil > now),
+    rateLimitedUntil: blockedUntil
+  };
+}
+
+export function clearFailedLoginAttempts(username, rateLimitKey) {
+  const normalizedUsername = normalizeLoginIdentity(username);
+  const normalizedRateLimitKey = normalizeRateLimitKey(rateLimitKey);
+  if (normalizedUsername) {
+    db.prepare("DELETE FROM user_login_security WHERE username = ?").run(normalizedUsername);
+  }
+  db.prepare("DELETE FROM login_rate_limits WHERE rate_key = ?").run(normalizedRateLimitKey);
 }
 
 export function listUsers() {
@@ -1599,9 +1625,9 @@ export function getDashboardChartData(range = "daily") {
   const productValues = Array(numberOfDays).fill(0);
 
   const productLogs = db.prepare(`
-    SELECT Sale_Date AS saleDate, Total_Amount AS totalAmount
-    FROM Products_Log
-    WHERE Sale_Date >= ? AND Sale_Date < ?
+    SELECT sale_date AS saleDate, total_amount AS totalAmount
+    FROM report_product_logs
+    WHERE sale_date >= ? AND sale_date < ?
   `).all(toIsoDate(monthStart), toIsoDate(nextMonthStart));
 
   const completedDigitalRequests = db.prepare(`
@@ -1701,26 +1727,26 @@ export function getLogsData(dateKey = toIsoDate(getTodayDate())) {
   const selectedDate = String(dateKey || toIsoDate(getTodayDate()));
   const productLogs = db.prepare(`
     SELECT
-      Products_Log.Log_ID AS logId,
-      Products_Log.Transaction_Code AS transactionCode,
-      Products_Log.Sale_Date AS date,
-      Products_Log.Total_Amount AS totalAmount,
-      Products_Log.Emp_Mng AS employee,
-      Products_Log.Time_Stamp AS timeStamp
-    FROM Products_Log
-    WHERE Products_Log.Sale_Date = ?
-    ORDER BY Products_Log.Time_Stamp DESC, Products_Log.Log_ID DESC
+      log_id AS logId,
+      transaction_code AS transactionCode,
+      sale_date AS date,
+      total_amount AS totalAmount,
+      employee_name AS employee,
+      time_stamp AS timeStamp
+    FROM report_product_logs
+    WHERE sale_date = ?
+    ORDER BY time_stamp DESC, log_id DESC
   `).all(selectedDate).map((row) => {
     const items = db.prepare(`
       SELECT
-        Log_Item_ID AS logItemId,
-        Product_ID AS productId,
-        Item_Name AS itemName,
-        Quantity AS quantity,
-        Selling_Price AS sellingPrice
-      FROM Selling_Log_Items
-      WHERE Log_ID = ?
-      ORDER BY Log_Item_ID ASC
+        id AS logItemId,
+        inventory_item_id AS productId,
+        item_name AS itemName,
+        quantity AS quantity,
+        price AS sellingPrice
+      FROM sale_items
+      WHERE sale_id = ?
+      ORDER BY id ASC
     `).all(row.logId).map((item) => ({
       ...item,
       quantity: Number(item.quantity || 0),
@@ -1737,23 +1763,59 @@ export function getLogsData(dateKey = toIsoDate(getTodayDate())) {
 
   const digitalRequestLogs = db.prepare(`
     SELECT
-      request_code AS requestCode,
-      service_type AS serviceType,
-      status,
-      mobile_number AS number,
-      amount,
-      request_kind AS requestKind,
-      network,
-      load_type AS loadType,
-      load_value AS loadValue,
-      reference_no AS referenceNo,
-      requested_by_name AS requestedBy,
-      requested_at AS requestedAt,
-      completed_by_name AS completedBy,
-      completed_at AS completedAt
-    FROM digital_service_requests
-    WHERE date(datetime(requested_at, '+8 hours')) = ?
-    ORDER BY requested_at DESC, id DESC
+      logs.transaction_code AS requestCode,
+      logs.service_type AS serviceType,
+      logs.status,
+      logs.number,
+      logs.amount,
+      logs.request_kind AS requestKind,
+      logs.network,
+      logs.load_type AS loadType,
+      logs.load_value AS loadValue,
+      logs.reference_no AS referenceNo,
+      logs.requested_by_name AS requestedBy,
+      logs.requested_at AS requestedAt,
+      logs.completed_by_name AS completedBy,
+      logs.completed_at AS completedAt
+    FROM (
+      SELECT
+        'eload' AS service_type,
+        transaction_code,
+        number,
+        amount,
+        '' AS request_kind,
+        network,
+        '' AS load_type,
+        item_name AS load_value,
+        '' AS reference_no,
+        requested_by_name,
+        requested_at,
+        completed_by_name,
+        completed_at,
+        status,
+        time_stamp
+      FROM report_eload_logs
+      UNION ALL
+      SELECT
+        'gcash' AS service_type,
+        transaction_code,
+        number,
+        amount,
+        request_kind,
+        '' AS network,
+        '' AS load_type,
+        '' AS load_value,
+        reference_no,
+        requested_by_name,
+        requested_at,
+        completed_by_name,
+        completed_at,
+        status,
+        time_stamp
+      FROM report_gcash_logs
+    ) logs
+    WHERE date(datetime(logs.requested_at, '+8 hours')) = ?
+    ORDER BY logs.requested_at DESC, logs.transaction_code DESC
   `).all(selectedDate).map((row) => ({
     ...row,
     amount: Number(row.amount || 0)

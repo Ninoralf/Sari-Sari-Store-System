@@ -1,14 +1,23 @@
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import process from "node:process";
 
-const baseUrl = "http://127.0.0.1:3000";
 const adminPassword = process.env.ADMIN_PASSWORD || process.env.DEFAULT_ADMIN_PASSWORD || crypto.randomUUID();
+const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "sari-sari-smoke-"));
+const smokeDbPath = path.join(tempDir, "store.db");
+const smokePort = Number(process.env.SMOKE_PORT || crypto.randomInt(32000, 39000));
+const baseUrl = `http://127.0.0.1:${smokePort}`;
 const server = spawn(process.execPath, ["src/server.js"], {
   cwd: process.cwd(),
   env: {
     ...process.env,
-    ADMIN_PASSWORD: adminPassword
+    ADMIN_PASSWORD: adminPassword,
+    PORT: String(smokePort),
+    SESSION_SECRET: "smoke-test-session-secret",
+    STORE_DB_PATH: smokeDbPath
   },
   stdio: ["ignore", "pipe", "pipe"]
 });
@@ -64,15 +73,16 @@ function extractCsrfToken(html) {
 }
 
 async function request(path, options = {}) {
-  const headers = new Headers(options.headers || {});
+  const { headers: rawHeaders, ...fetchOptions } = options;
+  const headers = new Headers(rawHeaders || {});
   if (sessionCookie && !headers.has("Cookie")) {
     headers.set("Cookie", sessionCookie);
   }
 
   const response = await fetch(`${baseUrl}${path}`, {
     redirect: "manual",
-    headers,
-    ...options
+    ...fetchOptions,
+    headers
   });
   updateSessionCookie(response);
   return response;
@@ -108,13 +118,23 @@ async function main() {
   if (loginLocation !== "/") {
     throw new Error(`POST /login redirected to ${loginLocation || "(missing location)"} instead of /.`);
   }
-  const authenticatedPaths = ["/", "/inventory", "/sales", "/reports", "/best-selling", "/settings"];
+  const authenticatedPaths = ["/", "/inventory", "/sales", "/eload", "/logs", "/settings", "/users"];
 
   for (const path of authenticatedPaths) {
     const response = await request(path);
     if (!response.ok) {
       throw new Error(`${path} returned ${response.status}.`);
     }
+  }
+
+  const reportsResponse = await request("/reports");
+  if (reportsResponse.status !== 302 || reportsResponse.headers.get("location") !== "/") {
+    throw new Error(`/reports did not redirect to /. Received ${reportsResponse.status} -> ${reportsResponse.headers.get("location") || "(missing location)"}.`);
+  }
+
+  const bestSellingResponse = await request("/best-selling");
+  if (bestSellingResponse.status !== 302 || bestSellingResponse.headers.get("location") !== "/") {
+    throw new Error(`/best-selling did not redirect to /. Received ${bestSellingResponse.status} -> ${bestSellingResponse.headers.get("location") || "(missing location)"}.`);
   }
 
   const inventoryCsv = await request("/settings/export/inventory.csv");
@@ -133,5 +153,9 @@ async function main() {
 try {
   await main();
 } finally {
-  server.kill("SIGTERM");
+  if (server.exitCode === null) {
+    server.kill("SIGTERM");
+    await new Promise((resolve) => server.once("exit", resolve));
+  }
+  fs.rmSync(tempDir, { recursive: true, force: true });
 }

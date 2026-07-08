@@ -164,13 +164,42 @@
     let notificationsRefreshInFlight = false;
     let seenNotificationPopups = new Set();
 
-    function escapeHtml(value) {
-      return String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
+    function sanitizeNotificationLink(value) {
+      const link = String(value || "").trim();
+      return link.startsWith("/") ? link : "";
+    }
+
+    function buildNotificationElement(notification, className) {
+      const tagName = notification.link ? "a" : "div";
+      const wrapper = document.createElement(tagName);
+      wrapper.className = className;
+      const safeLink = sanitizeNotificationLink(notification.link);
+      if (safeLink && tagName === "a") wrapper.href = safeLink;
+
+      const content = document.createElement("div");
+      content.className = "d-flex gap-3";
+
+      const iconWrap = document.createElement("div");
+      iconWrap.className = `notification-icon text-${String(notification.tone || "primary").replace(/[^a-z-]/gi, "") || "primary"}`;
+      const icon = document.createElement("i");
+      icon.className = `bi ${String(notification.icon || "bi-bell").replace(/[^a-z0-9-]/gi, "") || "bi-bell"}`;
+      iconWrap.appendChild(icon);
+
+      const textWrap = document.createElement("div");
+      textWrap.className = tagName === "a" ? "" : "min-w-0";
+      const title = document.createElement("div");
+      title.className = "fw-semibold";
+      title.textContent = String(notification.title || "");
+      const message = document.createElement("div");
+      message.className = "mini-note";
+      message.textContent = String(notification.message || "");
+
+      textWrap.appendChild(title);
+      textWrap.appendChild(message);
+      content.appendChild(iconWrap);
+      content.appendChild(textWrap);
+      wrapper.appendChild(content);
+      return wrapper;
     }
 
     function loadSeenNotificationPopups() {
@@ -203,21 +232,7 @@
         if (seenNotificationPopups.has(key)) return;
         seenNotificationPopups.add(key);
 
-        const popupTag = notification.link ? "a" : "div";
-        const popup = document.createElement(popupTag);
-        popup.className = "notification-popup notification-item";
-        if (notification.link) popup.href = notification.link;
-        popup.innerHTML = `
-          <div class="d-flex gap-3">
-            <div class="notification-icon text-${escapeHtml(notification.tone)}">
-              <i class="bi ${escapeHtml(notification.icon)}"></i>
-            </div>
-            <div class="min-w-0">
-              <div class="fw-semibold">${escapeHtml(notification.title)}</div>
-              <div class="mini-note">${escapeHtml(notification.message)}</div>
-            </div>
-          </div>
-        `;
+        const popup = buildNotificationElement(notification, "notification-popup notification-item");
 
         window.setTimeout(() => {
           notificationPopupStack.appendChild(popup);
@@ -244,26 +259,15 @@
 
       if (!notifications.length) {
         existingList.className = "px-3 py-4 text-center mini-note";
-        existingList.innerHTML = "No notifications to show.";
+        existingList.textContent = "No notifications to show.";
       } else {
         existingList.className = "list-group list-group-flush";
-        existingList.innerHTML = notifications.map((notification) => {
-          const content = `
-            <div class="d-flex gap-3">
-              <div class="notification-icon text-${escapeHtml(notification.tone)}">
-                <i class="bi ${escapeHtml(notification.icon)}"></i>
-              </div>
-              <div>
-                <div class="fw-semibold">${escapeHtml(notification.title)}</div>
-                <div class="mini-note">${escapeHtml(notification.message)}</div>
-              </div>
-            </div>
-          `;
-          if (notification.link) {
-            return `<a class="list-group-item border-0 px-3 py-3 notification-item notification-link" href="${escapeHtml(notification.link)}">${content}</a>`;
-          }
-          return `<div class="list-group-item border-0 px-3 py-3 notification-item">${content}</div>`;
-        }).join("");
+        existingList.replaceChildren();
+        notifications.forEach((notification) => {
+          existingList.appendChild(
+            buildNotificationElement(notification, "list-group-item border-0 px-3 py-3 notification-item notification-link")
+          );
+        });
       }
 
       notificationToggleButton.setAttribute(
