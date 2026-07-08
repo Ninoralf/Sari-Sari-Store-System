@@ -36,6 +36,11 @@
         </div>
         <% } %>
         <div class="tab-pane fade <%= activeTab === 'profile' ? 'show active' : '' %>" id="profile-tab">
+          <% if (forcePasswordChange) { %>
+            <div class="alert alert-warning" role="alert">
+              Change the default admin password before continuing to use the system.
+            </div>
+          <% } %>
           <div class="content-card p-4 mb-4">
             <div class="section-title mb-3">User Profile</div>
             <form action="/settings/profile" method="post" class="row g-3">

@@ -31,9 +31,10 @@ import {
   getSalesMetrics,
   getStoreSettings,
   getEloadPromoCatalog,
+  getUserAuthById,
+  getUserAuthByUsername,
   listDigitalServiceRequests,
   getUserById,
-  getUserByUsername,
   initializeDatabase,
   listCategories,
   listEloadNetworks,
@@ -48,6 +49,7 @@ import {
   updateCategory,
   updateEloadPromo,
   updateInventoryItem,
+  updateInventoryItemStatus,
   updateNotifications,
   updatePassword,
   updateSupplier,
@@ -68,7 +70,7 @@ const sessionCookieName = "store.sid";
 const versionData = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "public", "version.json"), "utf8"));
 const systemVersion = versionData.version;
 
-initializeDatabase();
+await initializeDatabase();
 
 
 
@@ -96,11 +98,12 @@ function buildCsrfToken() {
   return crypto.randomBytes(32).toString("hex");
 }
 
-function setAuthSession(req, userId) {
+function setAuthSession(req, userId, mustChangePassword = false) {
   req.session.user = { id: userId };
   req.session.authToken = crypto.randomBytes(24).toString("hex");
   req.session.authExpiresAt = Date.now() + sessionMaxAgeMs;
   req.session.csrfToken = buildCsrfToken();
+  req.session.mustChangePassword = Boolean(mustChangePassword);
 }
 
 function clearAuthSession(req) {
@@ -108,6 +111,7 @@ function clearAuthSession(req) {
   delete req.session.authToken;
   delete req.session.authExpiresAt;
   delete req.session.csrfToken;
+  delete req.session.mustChangePassword;
 }
 
 function buildNotifications(storeSettings) {
@@ -238,6 +242,29 @@ app.use((req, res, next) => {
 function setFlash(req, type, message) {
   req.session.flash = { type, message };
 }
+
+app.use((req, res, next) => {
+  if (!req.session.user || !req.session.authToken) return next();
+  const currentUser = getUserById(req.session.user.id);
+  const mustChangePassword = Boolean(currentUser?.must_change_password);
+  req.session.mustChangePassword = mustChangePassword;
+  res.locals.forcePasswordChange = mustChangePassword;
+
+  if (!mustChangePassword) return next();
+
+  const allowSettingsView = req.method === "GET" && req.path === "/settings";
+  const allowPasswordChange = req.method === "POST" && req.path === "/settings/password";
+  const allowLogout = req.method === "POST" && req.path === "/logout";
+
+  if (allowSettingsView || allowPasswordChange || allowLogout) return next();
+
+  if (req.path.startsWith("/api/")) {
+    return res.status(403).json({ error: "Password change required." });
+  }
+
+  setFlash(req, "warning", "Change the default admin password before continuing.");
+  return res.redirect("/settings?tab=profile&forcePasswordChange=1");
+});
 
 function requireAuth(req, res, next) {
   if (!req.session.user || !req.session.authToken) {
@@ -534,15 +561,19 @@ app.get("/login", (req, res) => {
   return res.render("login", { pageTitle: "Login" });
 });
 
-app.post("/login", (req, res) => {
+app.post("/login", async (req, res) => {
   const { username, password } = req.body;
-  const user = getUserByUsername(username);
-  if (!user || !verifyPassword(password, user.password_hash)) {
+  const user = getUserAuthByUsername(username);
+  if (!user || !(await verifyPassword(password, user.password_hash))) {
     setFlash(req, "danger", "Invalid username or password.");
     return res.redirect("/login");
   }
   return req.session.regenerate(() => {
-    setAuthSession(req, user.id);
+    setAuthSession(req, user.id, user.must_change_password);
+    if (user.must_change_password) {
+      setFlash(req, "warning", "Change the default admin password before continuing.");
+      return req.session.save(() => res.redirect("/settings?tab=profile&forcePasswordChange=1"));
+    }
     setFlash(req, "success", "Welcome back.");
     return req.session.save(() => res.redirect("/"));
   });
@@ -690,13 +721,7 @@ app.post("/inventory/:id/update", requireAuth, (req, res) => {
     if (isAdmin) {
       updateInventoryItem(itemId, req.body);
     } else {
-      // Non-admin can only update status
-      const existing = listInventory("").find(i => i.id === itemId);
-      if (!existing) throw new Error("Item not found.");
-      updateInventoryItem(itemId, {
-        ...existing,
-        status: req.body.status
-      });
+      updateInventoryItemStatus(itemId, req.body.status);
     }
     setFlash(req, "success", "Inventory item updated.");
   } catch (error) {
@@ -781,6 +806,7 @@ app.get("/settings", requireAuth, (req, res) => {
     ? new Set(["store", "profile", "notifications", "appearance", "data"])
     : new Set(["profile", "appearance"]);
   const activeTab = allowedTabs.has(requestedTab) ? requestedTab : (isAdmin ? "store" : "profile");
+  const forcePasswordChange = Boolean(req.session.mustChangePassword || currentUser?.must_change_password);
 
   res.render("settings", {
     pageTitle: "Settings",
@@ -790,7 +816,8 @@ app.get("/settings", requireAuth, (req, res) => {
     categories: isAdmin ? listCategories() : [],
     suppliers: isAdmin ? listSuppliers() : [],
     eloadNetworks: isAdmin ? listEloadNetworks() : [],
-    activeTab
+    activeTab: forcePasswordChange ? "profile" : activeTab,
+    forcePasswordChange
   });
 });
 
@@ -830,7 +857,7 @@ app.post("/settings/profile", requireAuth, (req, res) => {
   res.redirect("/settings");
 });
 
-app.post("/users/add", requireAuth, requireAdmin, (req, res) => {
+app.post("/users/add", requireAuth, requireAdmin, async (req, res) => {
   const username = String(req.body.username || "").trim();
   const fullName = String(req.body.fullName || "").trim();
   const email = String(req.body.email || "").trim();
@@ -844,7 +871,7 @@ app.post("/users/add", requireAuth, requireAdmin, (req, res) => {
   }
 
   try {
-    createUserAccount({
+    await createUserAccount({
       username,
       fullName,
       role,
@@ -859,7 +886,7 @@ app.post("/users/add", requireAuth, requireAdmin, (req, res) => {
   return res.redirect("/users");
 });
 
-app.post("/users/:id/update", requireAuth, requireAdmin, (req, res) => {
+app.post("/users/:id/update", requireAuth, requireAdmin, async (req, res) => {
   const targetUserId = Number(req.params.id);
   const targetUser = getUserById(targetUserId);
   const username = String(req.body.username || "").trim();
@@ -880,7 +907,7 @@ app.post("/users/:id/update", requireAuth, requireAdmin, (req, res) => {
   }
 
   try {
-    updateUserAccount(targetUserId, {
+    await updateUserAccount(targetUserId, {
       username,
       fullName,
       role,
@@ -895,9 +922,9 @@ app.post("/users/:id/update", requireAuth, requireAdmin, (req, res) => {
   return res.redirect("/users");
 });
 
-app.post("/settings/password", requireAuth, (req, res) => {
-  const user = getUserById(req.session.user.id);
-  if (!verifyPassword(req.body.currentPassword, user.password_hash)) {
+app.post("/settings/password", requireAuth, async (req, res) => {
+  const user = getUserAuthById(req.session.user.id);
+  if (!(await verifyPassword(req.body.currentPassword, user.password_hash))) {
     setFlash(req, "danger", "Current password is incorrect.");
     return res.redirect("/settings");
   }
@@ -905,18 +932,19 @@ app.post("/settings/password", requireAuth, (req, res) => {
     setFlash(req, "danger", "New passwords do not match.");
     return res.redirect("/settings");
   }
-  updatePassword(req.session.user.id, req.body.newPassword);
+  await updatePassword(req.session.user.id, req.body.newPassword);
+  req.session.mustChangePassword = false;
   setFlash(req, "success", "Password changed successfully.");
   return res.redirect("/settings");
 });
 
-app.post("/settings/pin", requireAuth, (req, res) => {
-  const user = getUserById(req.session.user.id);
+app.post("/settings/pin", requireAuth, async (req, res) => {
+  const user = getUserAuthById(req.session.user.id);
   if (user.role !== "Admin") {
     setFlash(req, "danger", "Only admin accounts can use a security PIN.");
     return res.redirect("/settings");
   }
-  if (!verifyPin(req.body.currentPin, user.pin_hash)) {
+  if (!(await verifyPin(req.body.currentPin, user.pin_hash))) {
     setFlash(req, "danger", "Current PIN is incorrect.");
     return res.redirect("/settings");
   }
@@ -1071,8 +1099,8 @@ app.get("/settings/backup", requireAuth, requireAdmin, (req, res) => {
   res.download(getDatabasePath(), "store-backup.db");
 });
 
-app.post("/settings/reset", requireAuth, requireAdmin, (req, res) => {
-  const currentUser = getUserById(req.session.user.id);
+app.post("/settings/reset", requireAuth, requireAdmin, async (req, res) => {
+  const currentUser = getUserAuthById(req.session.user.id);
   const currentPassword = String(req.body.currentPassword || "");
 
   if (!currentPassword) {
@@ -1080,7 +1108,7 @@ app.post("/settings/reset", requireAuth, requireAdmin, (req, res) => {
     return res.redirect("/settings?tab=data");
   }
 
-  if (!currentUser || !verifyPassword(currentPassword, currentUser.password_hash)) {
+  if (!currentUser || !(await verifyPassword(currentPassword, currentUser.password_hash))) {
     setFlash(req, "danger", "Incorrect admin password. Data reset was canceled.");
     return res.redirect("/settings?tab=data");
   }
@@ -1096,10 +1124,4 @@ app.use((req, res) => {
 
 app.listen(port, () => {
   console.log(`Sari-Sari Store app running at http://localhost:${port}`);
-  console.log('ADMIN Credentials');
-  console.log('   Username:  admin');
-  console.log('   Password:  admin123');
-  console.log('USER Credentials');
-  console.log('   Username:  user');
-  console.log('   Password:  user123');
 });

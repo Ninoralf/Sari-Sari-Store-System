@@ -1,9 +1,15 @@
 import { spawn } from "node:child_process";
+import crypto from "node:crypto";
 import process from "node:process";
 
 const baseUrl = "http://127.0.0.1:3000";
+const adminPassword = process.env.ADMIN_PASSWORD || process.env.DEFAULT_ADMIN_PASSWORD || crypto.randomUUID();
 const server = spawn(process.execPath, ["src/server.js"], {
   cwd: process.cwd(),
+  env: {
+    ...process.env,
+    ADMIN_PASSWORD: adminPassword
+  },
   stdio: ["ignore", "pipe", "pipe"]
 });
 
@@ -91,7 +97,7 @@ async function main() {
     body: new URLSearchParams({
       _csrf: csrfToken,
       username: "admin",
-      password: "admin123"
+      password: adminPassword
     }).toString()
   });
 

@@ -206,6 +206,96 @@
     return new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(value || 0);
   }
 
+  function clearChildren(element) {
+    if (!element) return;
+    while (element.firstChild) element.removeChild(element.firstChild);
+  }
+
+  function appendTextElement(parent, tagName, className, text) {
+    const element = document.createElement(tagName);
+    if (className) element.className = className;
+    element.textContent = text;
+    parent.appendChild(element);
+    return element;
+  }
+
+  function renderBestSellingCard(item) {
+    if (!item || !dashboardBestSellingCard) return;
+    clearChildren(dashboardBestSellingCard);
+
+    const iconWrap = document.createElement("div");
+    iconWrap.className = "btn btn-sm btn-light rounded-circle shadow-sm";
+    const icon = document.createElement("i");
+    icon.className = "bi bi-award text-warning";
+    iconWrap.appendChild(icon);
+
+    const content = document.createElement("div");
+    appendTextElement(content, "div", "fw-bold fs-5", item.name || "");
+    appendTextElement(content, "div", "mini-note", `${Number(item.quantity_sold || 0)} units sold`);
+    appendTextElement(content, "div", "text-success fw-semibold", `${formatPeso(item.revenue)} revenue`);
+
+    dashboardBestSellingCard.appendChild(iconWrap);
+    dashboardBestSellingCard.appendChild(content);
+  }
+
+  function renderLowStockItems(items) {
+    if (!dashboardLowStockList) return;
+    clearChildren(dashboardLowStockList);
+
+    items.forEach((item) => {
+      const link = document.createElement("a");
+      link.className = "dashboard-alert-link d-flex justify-content-between align-items-center rounded-3 p-3 bg-light text-reset text-decoration-none border-start border-4 border-warning";
+      link.href = `/inventory?status=${encodeURIComponent(item.status)}&search=${encodeURIComponent(item.name)}`;
+
+      const textWrap = document.createElement("div");
+      appendTextElement(textWrap, "div", "fw-semibold", item.name || "");
+      appendTextElement(textWrap, "div", "mini-note", item.category || "");
+
+      const statusWrap = document.createElement("div");
+      statusWrap.className = "text-end";
+      appendTextElement(statusWrap, "div", `fw-bold ${item.status === "Out of Stock" ? "text-danger" : "text-warning"}`, item.status || "");
+      appendTextElement(statusWrap, "div", "mini-note", "Manual stock check");
+
+      link.appendChild(textWrap);
+      link.appendChild(statusWrap);
+      dashboardLowStockList.appendChild(link);
+    });
+  }
+
+  function renderCategoryBreakdown(items) {
+    if (!categoryBreakdownList) return;
+    clearChildren(categoryBreakdownList);
+
+    const totalBreakdown = items.reduce((sum, item) => sum + Number(item.revenue || 0), 0);
+    items.forEach((item, index) => {
+      const percentage = totalBreakdown ? ((Number(item.revenue || 0) / totalBreakdown) * 100).toFixed(1) : "0.0";
+      const wrapper = document.createElement("div");
+
+      const header = document.createElement("div");
+      header.className = "d-flex justify-content-between";
+      appendTextElement(header, "div", "fw-semibold", item.category || "");
+      appendTextElement(header, "div", "", formatPeso(item.revenue));
+
+      const progress = document.createElement("div");
+      progress.className = "progress progress-soft mt-2";
+      const progressBar = document.createElement("div");
+      progressBar.className = "progress-bar";
+      progressBar.setAttribute("role", "progressbar");
+      progressBar.style.width = `${percentage}%`;
+      progressBar.style.backgroundColor = chartColors[index % 6];
+      progress.appendChild(progressBar);
+
+      const note = document.createElement("div");
+      note.className = "mini-note mt-1";
+      note.textContent = `${percentage}% of total sales`;
+
+      wrapper.appendChild(header);
+      wrapper.appendChild(progress);
+      wrapper.appendChild(note);
+      categoryBreakdownList.appendChild(wrapper);
+    });
+  }
+
   const sharedOptions = {
     responsive: true,
     plugins: {
@@ -280,21 +370,8 @@
       dashboardMetricMonthlyLoad.textContent = formatPeso(payload.metrics.monthlyLoad);
       dashboardMetricMonthlyGcash.textContent = formatPeso(payload.metrics.monthlyGcash);
 
-      if (payload.bestSellingItem && dashboardBestSellingCard) {
-        dashboardBestSellingCard.innerHTML = `
-          <div class="btn btn-sm btn-light rounded-circle shadow-sm"><i class="bi bi-award text-warning"></i></div>
-          <div><div class="fw-bold fs-5">${payload.bestSellingItem.name}</div><div class="mini-note">${payload.bestSellingItem.quantity_sold} units sold</div><div class="text-success fw-semibold">${new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(payload.bestSellingItem.revenue)} revenue</div></div>
-        `;
-      }
-
-      if (dashboardLowStockList) {
-        dashboardLowStockList.innerHTML = payload.lowStockItems.map((item) => `
-          <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-3 p-3 bg-light text-reset text-decoration-none border-start border-4 border-warning" href="/inventory?status=${encodeURIComponent(item.status)}&search=${encodeURIComponent(item.name)}">
-            <div><div class="fw-semibold">${item.name}</div><div class="mini-note">${item.category}</div></div>
-            <div class="text-end"><div class="fw-bold ${item.status === "Out of Stock" ? "text-danger" : "text-warning"}">${item.status}</div><div class="mini-note">Manual stock check</div></div>
-          </a>
-        `).join("");
-      }
+      renderBestSellingCard(payload.bestSellingItem);
+      renderLowStockItems(Array.isArray(payload.lowStockItems) ? payload.lowStockItems : []);
 
       if (dashboardPendingEloadList) {
         dashboardPendingEloadList.innerHTML = payload.pendingEloadRequests.length
@@ -342,18 +419,8 @@
       categoryPie.data.labels = payload.categoryBreakdown.map(x => x.category);
       categoryPie.data.datasets[0].data = payload.categoryBreakdown.map(x => x.revenue);
       categoryPie.update();
-      
-      const totalBreakdown = payload.categoryBreakdown.reduce((sum, item) => sum + item.revenue, 0);
-      categoryBreakdownList.innerHTML = payload.categoryBreakdown.map((item, index) => {
-        const percentage = totalBreakdown ? ((item.revenue / totalBreakdown) * 100).toFixed(1) : 0;
-        return `
-          <div>
-            <div class="d-flex justify-content-between"><div class="fw-semibold">${item.category}</div><div>${formatPeso(item.revenue)}</div></div>
-            <div class="progress progress-soft mt-2"><div class="progress-bar" role="progressbar" style="width: ${percentage}%; background-color: ${chartColors[index % 6]}"></div></div>
-            <div class="mini-note mt-1">${percentage}% of total sales</div>
-          </div>
-        `;
-      }).join("");
+
+      renderCategoryBreakdown(Array.isArray(payload.categoryBreakdown) ? payload.categoryBreakdown : []);
 
     } catch (error) {
       console.error(error);

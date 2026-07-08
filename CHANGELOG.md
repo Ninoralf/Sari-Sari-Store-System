@@ -2,7 +2,16 @@
 
 All notable changes to the Sari-Sari Store Management System are documented here.
 
-This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.6.1`.
+This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.6.2`.
+
+## [1.6.2] - 2026-07-09
+
+### Fixed
+- Password Security: Removed plain-text password storage and switched authentication and password updates to bcrypt-only hashing and comparison.
+- Admin Seeding: Default admin credentials now seed from `.env` when available, and fallback seeding requires a password change on first login.
+- Inventory Seeding: Startup inventory seeding now guarantees unique barcodes on both new and existing databases.
+- Inventory Authorization: Non-admin inventory edits are restricted to status-only changes.
+- Stored XSS: Replaced unsafe server-data rendering paths with DOM-safe updates in Dashboard and eLoad views.
 
 ## [1.6.1] - 2026-07-04
 

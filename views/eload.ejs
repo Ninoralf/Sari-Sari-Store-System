@@ -583,13 +583,24 @@
   }
 
   function renderNetworks() {
-    eloadNetworkGrid.innerHTML = Object.keys(networkPromos).map(net => `
-      <div class="col-4 col-md-2">
-        <button type="button" class="btn w-100 py-2 border rounded-3 network-btn ${selectedNetwork === net ? 'btn-primary border-primary' : 'btn-white'}" data-network="${net}">
-          <div class="fw-bold small">${net}</div>
-        </button>
-      </div>
-    `).join("");
+    eloadNetworkGrid.replaceChildren();
+    Object.keys(networkPromos).forEach((net) => {
+      const column = document.createElement("div");
+      column.className = "col-4 col-md-2";
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `btn w-100 py-2 border rounded-3 network-btn ${selectedNetwork === net ? "btn-primary border-primary" : "btn-white"}`;
+      button.dataset.network = net;
+
+      const label = document.createElement("div");
+      label.className = "fw-bold small";
+      label.textContent = net;
+
+      button.appendChild(label);
+      column.appendChild(button);
+      eloadNetworkGrid.appendChild(column);
+    });
   }
 
   function updateEloadValues() {
@@ -621,7 +632,17 @@
     renderNetworks();
     
     eloadPromoSelect.disabled = false;
-    eloadPromoSelect.innerHTML = `<option value="">Select Promo</option>` + (networkPromos[selectedNetwork] || []).map((p) => `<option value="${escapeHtml(p.name)}">${escapeHtml(p.name)} - ${peso.format(Number(p.price || 0))}</option>`).join("");
+    eloadPromoSelect.replaceChildren();
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.textContent = "Select Promo";
+    eloadPromoSelect.appendChild(defaultOption);
+    (networkPromos[selectedNetwork] || []).forEach((promo) => {
+      const option = document.createElement("option");
+      option.value = String(promo.name || "");
+      option.textContent = `${String(promo.name || "")} - ${peso.format(Number(promo.price || 0))}`;
+      eloadPromoSelect.appendChild(option);
+    });
     updateEloadValues();
   });
 

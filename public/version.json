@@ -1,10 +1,10 @@
 {
-  "version": "1.6.1",
+  "version": "1.6.2",
   "changes": [
-    "Changed",
-    " Data reset now clears operational records only and keeps accounts, settings, and configured options.",
-    " Reset All Data now uses an admin confirmation modal with current-password verification.",
-    " Inventory search suggestions were removed to keep the search flow simpler and more focused.",
-    " Related logs, request records, and sales detail rows are now included in data reset cleanup."
+    "Fixed password storage to use bcrypt only and removed plain-text password handling.",
+    "Admin accounts now seed from .env when available and require a password change when the fallback is used.",
+    "Inventory seeding now avoids duplicate barcodes during startup on both new and existing databases.",
+    "Non-admin inventory edits are now restricted to status-only updates.",
+    "Server-provided dashboard and eLoad content now renders safely without unsafe innerHTML."
   ]
 }
