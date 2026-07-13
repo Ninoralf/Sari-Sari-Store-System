@@ -1,0 +1,220 @@
+# Changelog
+
+All notable changes to the Sari-Sari Store Management System are documented here.
+
+This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.7.0`.
+
+## [1.7.0] - 2026-07-09
+
+### What's New
+- Introduced a persistent SQLite-backed session store, replacing the default in-memory session storage.
+- Added SQL views for reporting, allowing dashboards and historical views to derive data from canonical sales records.
+- Added isolated smoke-test database support through `STORE_DB_PATH` for safer automated testing.
+
+### Changed
+- Refactored reporting to use `sales`, `sale_items`, and `digital_service_requests` as the canonical source of truth.
+- Product, GCash, and E-Load log views are now generated from canonical data instead of maintaining duplicate write operations.
+- Updated smoke tests and project documentation to reflect the current application behavior and deployment process.
+- Restored `/reports` as a compatibility redirect to the Dashboard.
+
+### Security
+- Replaced Express MemoryStore with a persistent SQLite session store.
+- Added login rate limiting and temporary account lockout protection.
+- Production deployments now require `SESSION_SECRET`.
+- Removed remaining unsafe dynamic HTML rendering paths to reduce stored and reflected XSS risks.
+
+### Fixed
+- Smoke tests now run against isolated temporary databases instead of the live database.
+- Eliminated remaining `COUNT(*) + 1` identifier generation in favor of stable identifiers.
+- Improved compatibility for Docker and Portainer deployments without resetting existing user accounts or data.
+
+## [1.6.2] - 2026-07-09
+
+### Fixed
+- Password Security: Removed plain-text password storage and switched authentication and password updates to bcrypt-only hashing and comparison.
+- Admin Seeding: Default admin credentials now seed from `.env` when available, and fallback seeding requires a password change on first login.
+- Inventory Seeding: Startup inventory seeding now guarantees unique barcodes on both new and existing databases.
+- Inventory Authorization: Non-admin inventory edits are restricted to status-only changes.
+- Stored XSS: Replaced unsafe server-data rendering paths with DOM-safe updates in Dashboard and eLoad views.
+
+## [1.6.1] - 2026-07-04
+
+### Changed
+- Data Reset Scope: Updated the reset flow to permanently clear operational records only, while keeping user accounts, store settings, and configured reference data intact.
+- Reset Confirmation: Replaced the simple browser confirm step with an admin-only confirmation modal that explains exactly what will be deleted.
+- Inventory Search UX: Removed the old live suggestion dropdown from Inventory and kept the faster direct search-and-filter workflow.
+
+### Fixed
+- Reset Audit Safety: The reset action now requires the current admin password before any records are deleted.
+- Reset Data Coverage: Added deletion of related sales detail rows, logs, and digital service requests so operational data is cleared more completely.
+
+## [1.6.0] - 2026-07-03
+
+### What's New
+- Production Barcode Scanning: Added a shared camera scanner for Inventory and Sales using `html5-qrcode` with desktop webcam and Android camera support.
+- Inventory Barcode Workflow: Added required barcode fields with scan and clear actions for Add/Edit Item, plus duplicate barcode protection.
+- Sales Barcode Workflow: Added a large Scan Product action and manual barcode entry that both add matching products directly to the cart.
+- Camera Handling: Added camera selection, automatic stop on scan or close, and safer cleanup to prevent leaked streams.
+
+### Changed
+- Inventory search now considers barcodes alongside name, category, and supplier.
+- Existing inventory rows were backfilled with unique legacy barcodes during migration so the new required field could be enforced.
+
+## [1.5.3] - 2026-06-18
+
+### Fixed
+- Dark Mode Visibility: Resolved issues where text was invisible in Dark Mode due to matching background colors, specifically affecting view toggles and selection buttons.
+- Theme-Aware Components: Overrode the `.bg-light` class in Dark Mode to use appropriate dark surface colors.
+- Improved Selectors: Fixed visibility for the "Choose Service Type" and "Choose Load" sections in the E-load tab.
+
+### What's New
+- Theme-Aware `btn-white`: Implemented a utility class that automatically adjusts its colors based on the active theme (Light/Dark).
+
+## [1.5.2] - 2026-06-18
+
+### Fixed
+- E-load Copy Functionality: Fixed the broken copy button in the e-load queue by implementing a robust `copyToClipboard` utility.
+- Secure Context Fallback: Added a fallback mechanism for the clipboard API to ensure copying works on local network setups without HTTPS.
+- Visual Feedback: Implemented immediate visual cues (checkmark icon and "Copied!" tooltip) when a mobile number is successfully copied.
+
+### What's New
+- History Copy Support: Added copy buttons to the "Recent Requests" history section, allowing operators to quickly re-copy numbers from recently processed transactions.
+
+## [1.5.1] - 2026-06-18
+
+### What's New
+- Mobile Cart Optimization: Redesigned the cart summary into a responsive grid (2+1 layout) to prevent cramped text on small screens.
+- Enhanced Cart Viewport Fit: Fixed the cart drawer positioning and width on mobile to ensure it anchors correctly within the viewport without being cut off.
+
+### Changed
+- Disabled automatic search focus when entering the Sales tab to prevent the keyboard from popping up unexpectedly on mobile.
+- Refined cart quantity controls on mobile by removing fixed widths that were causing layout breakage in narrow tables.
+
+## [1.5.0] - 2026-06-18
+
+### What's New
+- Responsive Status Metrics: Implemented an adaptive card system that displays full text on PC and compact icons on mobile for both Dashboard and Inventory pages.
+- High-Density Grid: Optimized the mobile layout to show 4 status metrics per row (up from 2), significantly increasing data visibility on small screens.
+- Mobile Button Optimization: Transformed large inventory management buttons into sleek, icon-only circular buttons on mobile devices.
+
+### Changed
+- Improved mobile viewport containment with `overflow-x: hidden` to eliminate horizontal scrolling.
+- Refined typography and spacing across all mobile metric cards for a cleaner, modern look.
+- Synchronized visual styles between the Dashboard and Inventory summary sections for consistency.
+
+## [1.4.0] - 2026-06-17
+
+### What's New
+- Consolidated Reports functionality into the Dashboard to provide a unified business overview in a single view.
+- Added an "Analytics & Long-term Insights" section to the Dashboard featuring weekly performance bars, monthly trend lines, and category revenue breakdowns.
+- Separated Monthly Sales metrics into three distinct cards for Product Sales, eLoad Sales, and GCash Sales.
+
+### Changed
+- Removed the standalone Reports tab from the navigation and account dropdown.
+- Restructured the Inventory status grid on the Inventory page into a single horizontal row for better space utilization.
+- Unified data retrieval logic in `src/db.js` to support the consolidated Dashboard.
+
+## [1.3.0] - 2026-06-16
+
+### What's New
+- Moved Category and Supplier management from Settings to the Inventory tab for centralized product management.
+- Added a global system footer displaying the developer's name and the current system version.
+
+### Changed
+- Integrated Category and Supplier management via modals with dedicated buttons in the inventory header.
+- Optimized inventory management buttons for better mobile responsiveness using dynamic sizing and padding.
+- Improved server-side version management to dynamically serve the version number across all views.
+
+## [1.2.0] - 2026-06-15
+
+### Changed
+- Moved the eLoad setting to the eLoad tab for better and faster navigation.
+- Updated the display of logs Tabs and Queue from eLoad Tabs.
+- The Logs tabs now display the load value instead of the selling price.
+- Fixed the Queue from eLoad not displaying the selling price.
+
+## [1.0.0] - 2026-06-13
+
+### What's New
+- Added configurable eLoad network management so supported networks can be maintained from the app instead of being fixed in the interface.
+- Added edit support for eLoad promos.
+- Added Docker support for production-style hosting with `Dockerfile` and `docker-compose.yml`.
+- Improved the dashboard and eLoad interface for clearer day-to-day operation.
+- Added improved logs access and optimized the logs interface.
+
+### Changed
+- Polished the current cart experience, especially in mobile mode.
+- Improved role and access behavior around protected sections.
+- Refined the eLoad workflow and general user experience.
+- Persisted database updates more reliably.
+
+### Fixed
+- Fixed active color synchronization for the current cart button in mobile mode.
+- Fixed database save behavior when updating records.
+
+## [0.9.0] - 2026-05-27
+
+### What's New
+- Overhauled the Sales, eLoad, and Inventory user interfaces.
+- Removed the PIN verification system in favor of username/password authentication.
+- Added user preference persistence through local storage.
+- Added a Windows scale setting under Appearance preferences.
+- Added seeded user credentials for easier local testing.
+
+### Changed
+- Improved Inventory readability and navigation.
+- Limited standard users from seeing detailed inventory information.
+- Reduced dashboard refresh timing to make operational data feel more current.
+- Reworked Appearance settings layout and styling.
+- Improved mobile statuses, tabs, the current cart panel, and overall responsive behavior.
+- Updated project documentation to match the newer workflow.
+
+### Fixed
+- Fixed notification behavior.
+- Improved role/access handling after the PIN-less authentication update.
+
+## [0.8.0] - 2026-04-24
+
+### What's New
+- Added dashboard auto-refresh polling.
+- Added live dashboard overview refresh every 10 seconds.
+- Added sales chart refresh every 15 seconds.
+- Added better syncing for pending eLoad and GCash request cards across accounts.
+- Added Supplier CRUD management in Settings.
+
+### Changed
+- Optimized dashboard data display and corrected dashboard calculations.
+- Moved the desktop navigation to a top bar while retaining the sidebar for the mobile drawer.
+- Improved the dashboard mobile layout.
+- Continued broad UI/UX optimization across major screens.
+
+### Fixed
+- Fixed dashboard chart behavior.
+- Fixed logs display issues.
+- Fixed account tab behavior.
+
+## [0.7.0] - 2026-04-21
+
+### What's New
+- Added request-based transaction handling for eLoad.
+- Added improved quick buttons for faster sales entry.
+- Added logs tab for operational tracking.
+- Added role-based access controls.
+- Added inventory status printing.
+
+### Changed
+- Removed unnecessary interface elements and simplified workflows.
+- Optimized early user experience across the dashboard and sales flow.
+- Improved account management tab behavior.
+
+## [0.1.0] - 2026-03-22
+
+### What's New
+- Initial project import.
+- Established the Express, EJS, Bootstrap, and SQLite application foundation.
+- Added the first version of the Sari-Sari Store Management System structure.
+
+## Links
+
+- Project overview: [SYSTEM_OVERVIEW.md](SYSTEM_OVERVIEW.md)
+- Setup and usage: [README.md](README.md)

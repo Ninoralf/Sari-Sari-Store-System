@@ -1,0 +1,10 @@
+{
+  "version": "1.7.0",
+  "changes": [
+    "Refactored reporting to use canonical sales data with SQL views instead of duplicate log writes.",
+    "Added persistent SQLite-backed session storage to replace MemoryStore.",
+    "Added login rate limiting and temporary account lockout for improved security.",
+    "Production now requires SESSION_SECRET before startup.",
+    "Improved smoke testing with isolated temporary databases and safer Docker deployment."
+  ]
+}

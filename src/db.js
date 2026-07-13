@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import bcrypt from "bcrypt";
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -13,8 +14,22 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-const dbPath = path.join(dataDir, "store.db");
+const configuredDbPath = String(process.env.STORE_DB_PATH || "").trim();
+const dbPath = configuredDbPath
+  ? (path.isAbsolute(configuredDbPath) ? configuredDbPath : path.join(__dirname, "..", configuredDbPath))
+  : path.join(dataDir, "store.db");
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
 export const db = new DatabaseSync(dbPath);
+const envFilePath = path.join(__dirname, "..", ".env");
+const LOGIN_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 10;
+const LOGIN_RATE_LIMIT_BLOCK_MS = 10 * 60 * 1000;
+const LOGIN_ACCOUNT_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_ACCOUNT_MAX_ATTEMPTS = 5;
+const LOGIN_ACCOUNT_LOCK_MS = 15 * 60 * 1000;
 
 function padNumber(value) {
   return String(value).padStart(2, "0");
@@ -55,16 +70,12 @@ function withTransaction(callback) {
 }
 
 export function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString("hex");
-  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
-  return `${salt}:${hash}`;
+  return bcrypt.hash(String(password || ""), 12);
 }
 
 export function verifyPassword(password, stored) {
-  if (!stored || !stored.includes(":")) return false;
-  const [salt, originalHash] = stored.split(":");
-  const computedHash = crypto.scryptSync(password, salt, 64).toString("hex");
-  return crypto.timingSafeEqual(Buffer.from(originalHash, "hex"), Buffer.from(computedHash, "hex"));
+  if (!stored) return Promise.resolve(false);
+  return bcrypt.compare(String(password || ""), stored);
 }
 
 export function hashPin(pin) {
@@ -88,6 +99,20 @@ function deriveLegacyStatus(stockQuantity, reorderLevel) {
   return "In Stock";
 }
 
+const defaultEloadNetworks = {
+  TM: ["EZ50", "ASTIG99", "ALLNET20", "EASYSURF50"],
+  GLOBE: ["GO59", "GO+99", "GOUNLI129", "SURF4ALL99"],
+  SMART: ["ALL DATA 50", "MAGICSARAP99", "POWER ALL 99", "GIGA VIDEO 99"],
+  TNT: ["TNT PANALO 30", "SURFSAYA 50", "ALL DATA 99", "SAYA ALL 99"],
+  SUN: ["CTC50", "TU200", "SURF50", "UNLI TXT 50"],
+  DITO: ["DITO 10", "DITO 50", "LEVEL-UP 99", "UNLI 5G 149"]
+};
+
+function parsePromoSellingPrice(promoName) {
+  const matches = String(promoName || "").match(/(\d+(?:\.\d+)?)/g);
+  return matches ? Number(matches[matches.length - 1]) : 0;
+}
+
 function createSchema() {
   db.exec(`
     PRAGMA foreign_keys = ON;
@@ -99,11 +124,12 @@ function createSchema() {
       email TEXT NOT NULL,
       phone TEXT NOT NULL,
       password_hash TEXT NOT NULL,
-      plain_password TEXT NOT NULL DEFAULT '',
-      pin_hash TEXT NOT NULL DEFAULT ''
+      pin_hash TEXT NOT NULL DEFAULT '',
+      must_change_password INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS inventory_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      barcode TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
       category TEXT NOT NULL,
       supplier TEXT NOT NULL DEFAULT '',
@@ -119,6 +145,7 @@ function createSchema() {
       transaction_code TEXT NOT NULL UNIQUE,
       sale_date TEXT NOT NULL,
       payment_method TEXT NOT NULL,
+      employee_name TEXT NOT NULL DEFAULT 'System',
       total_amount REAL NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -239,15 +266,136 @@ function createSchema() {
       category_name TEXT NOT NULL UNIQUE,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS eload_networks (
+      network_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      network_name TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS eload_promos (
+      promo_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      network_id INTEGER NOT NULL,
+      promo_name TEXT NOT NULL,
+      selling_price REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(network_id, promo_name),
+      FOREIGN KEY (network_id) REFERENCES eload_networks(network_id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS user_login_security (
+      username TEXT PRIMARY KEY,
+      failed_attempts INTEGER NOT NULL DEFAULT 0,
+      first_failed_at INTEGER,
+      locked_until INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS login_rate_limits (
+      rate_key TEXT PRIMARY KEY,
+      attempt_count INTEGER NOT NULL DEFAULT 0,
+      window_started_at INTEGER NOT NULL,
+      blocked_until INTEGER
+    );
   `);
+}
+
+function readEnvValue(name) {
+  if (!fs.existsSync(envFilePath)) return "";
+  const lines = fs.readFileSync(envFilePath, "utf8").split(/\r?\n/);
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const separatorIndex = trimmed.indexOf("=");
+    if (separatorIndex < 0) continue;
+    const key = trimmed.slice(0, separatorIndex).trim();
+    if (key !== name) continue;
+    let value = trimmed.slice(separatorIndex + 1).trim();
+    if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    return value;
+  }
+
+  return "";
+}
+
+function getSeedAdminPassword() {
+  const configuredPassword = String(
+    process.env.ADMIN_PASSWORD
+    || process.env.DEFAULT_ADMIN_PASSWORD
+    || readEnvValue("ADMIN_PASSWORD")
+    || readEnvValue("DEFAULT_ADMIN_PASSWORD")
+    || ""
+  ).trim();
+  return configuredPassword || null;
+}
+
+function isBcryptHash(value) {
+  return /^\$2[aby]\$\d{2}\$/.test(String(value || ""));
+}
+
+function isLegacyDefaultAdminPassword(user) {
+  return String(user?.username || "").trim().toLowerCase() === "admin"
+    && String(user?.plain_password || "") === "admin123";
 }
 
 function ensureUserSchema() {
   const columns = db.prepare("PRAGMA table_info(users)").all();
   const columnNames = new Set(columns.map((column) => column.name));
+  const requiresRebuild = columnNames.has("plain_password") || !columnNames.has("must_change_password");
+  if (!requiresRebuild) return;
 
-  if (!columnNames.has("plain_password")) {
-    db.exec("ALTER TABLE users ADD COLUMN plain_password TEXT NOT NULL DEFAULT ''");
+  const existingUsers = db.prepare("SELECT * FROM users ORDER BY id").all();
+
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec("BEGIN");
+  try {
+    db.exec(`
+      CREATE TABLE users_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        full_name TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'Admin',
+        email TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        pin_hash TEXT NOT NULL DEFAULT '',
+        must_change_password INTEGER NOT NULL DEFAULT 0
+      );
+    `);
+    const insertUser = db.prepare(`
+      INSERT INTO users_new (id, username, full_name, role, email, phone, password_hash, pin_hash, must_change_password)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const user of existingUsers) {
+      const mustChangePassword = columnNames.has("must_change_password")
+        ? Number(user.must_change_password || 0)
+        : (isLegacyDefaultAdminPassword(user) ? 1 : 0);
+      const legacyPlainPassword = columnNames.has("plain_password") ? String(user.plain_password || "") : "";
+      const passwordHash = legacyPlainPassword
+        ? bcrypt.hashSync(legacyPlainPassword, 12)
+        : String(user.password_hash || "");
+      insertUser.run(
+        user.id,
+        user.username,
+        user.full_name,
+        user.role,
+        user.email,
+        user.phone,
+        isBcryptHash(passwordHash) ? passwordHash : bcrypt.hashSync(crypto.randomUUID(), 12),
+        String(user.pin_hash || ""),
+        mustChangePassword ? 1 : 0
+      );
+    }
+
+    db.exec(`
+      DROP TABLE users;
+      ALTER TABLE users_new RENAME TO users;
+    `);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
   }
 }
 
@@ -267,6 +415,98 @@ function ensureInventorySchema() {
       updateStatus.run(deriveLegacyStatus(item.stock_quantity, item.reorder_level), item.id);
     }
   }
+
+  ensureInventoryBarcodeSchema();
+}
+
+function normalizeBarcode(value) {
+  return String(value || "").trim();
+}
+
+function legacyBarcodeForItem(item) {
+  return `LEGACY-${item.id}`;
+}
+
+function seedBarcodeForItem(item, index) {
+  const source = `${item.name || "ITEM"}-${index + 1}`.toUpperCase();
+  const compact = source.replace(/[^A-Z0-9]/g, "").slice(0, 18) || `ITEM${index + 1}`;
+  return `SEED-${compact}`;
+}
+
+function buildUniqueSeedBarcode(item, usedBarcodes, index) {
+  const baseBarcode = seedBarcodeForItem(item, index);
+  let barcode = baseBarcode;
+  let suffix = 2;
+
+  while (usedBarcodes.has(barcode)) {
+    barcode = `${baseBarcode}-${suffix}`;
+    suffix += 1;
+  }
+
+  usedBarcodes.add(barcode);
+  return barcode;
+}
+
+function ensureInventoryBarcodeSchema() {
+  const columns = db.prepare("PRAGMA table_info(inventory_items)").all();
+  const columnNames = new Set(columns.map((column) => column.name));
+
+  if (!columnNames.has("barcode")) {
+    db.exec("ALTER TABLE inventory_items ADD COLUMN barcode TEXT");
+  }
+
+  const items = db.prepare("SELECT id, barcode FROM inventory_items ORDER BY id").all();
+  const usedBarcodes = new Set();
+  const updateBarcode = db.prepare("UPDATE inventory_items SET barcode = ? WHERE id = ?");
+
+  for (const item of items) {
+    let barcode = normalizeBarcode(item.barcode);
+    if (!barcode || usedBarcodes.has(barcode)) {
+      barcode = legacyBarcodeForItem(item);
+      while (usedBarcodes.has(barcode)) barcode = `${legacyBarcodeForItem(item)}-${usedBarcodes.size + 1}`;
+      updateBarcode.run(barcode, item.id);
+    }
+    usedBarcodes.add(barcode);
+  }
+
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_items_barcode_unique ON inventory_items(barcode)");
+
+  const tableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'inventory_items'").get()?.sql || "";
+  if (/barcode\s+TEXT\s+NOT\s+NULL\s+UNIQUE/i.test(tableSql)) return;
+
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec("BEGIN");
+  try {
+    db.exec(`
+      CREATE TABLE inventory_items_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barcode TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL,
+        supplier TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'In Stock',
+        stock_quantity INTEGER NOT NULL DEFAULT 0,
+        unit_price REAL NOT NULL DEFAULT 0,
+        selling_price REAL NOT NULL DEFAULT 0,
+        reorder_level INTEGER NOT NULL DEFAULT 10,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      INSERT INTO inventory_items_new
+        (id, barcode, name, category, supplier, status, stock_quantity, unit_price, selling_price, reorder_level, created_at)
+      SELECT
+        id, barcode, name, category, supplier, status, stock_quantity, unit_price, selling_price, reorder_level, created_at
+      FROM inventory_items;
+      DROP TABLE inventory_items;
+      ALTER TABLE inventory_items_new RENAME TO inventory_items;
+      CREATE UNIQUE INDEX idx_inventory_items_barcode_unique ON inventory_items(barcode);
+    `);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
 }
 
 function ensureDigitalServiceRequestSchema() {
@@ -285,6 +525,91 @@ function ensureDigitalServiceRequestSchema() {
   if (!columnNames.has("failed_at")) {
     db.exec("ALTER TABLE digital_service_requests ADD COLUMN failed_at TEXT");
   }
+}
+
+function ensureSalesSchema() {
+  const columns = db.prepare("PRAGMA table_info(sales)").all();
+  const columnNames = new Set(columns.map((column) => column.name));
+
+  if (!columnNames.has("employee_name")) {
+    db.exec("ALTER TABLE sales ADD COLUMN employee_name TEXT NOT NULL DEFAULT 'System'");
+  }
+}
+
+function ensureAuthSecuritySchema() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_login_security (
+      username TEXT PRIMARY KEY,
+      failed_attempts INTEGER NOT NULL DEFAULT 0,
+      first_failed_at INTEGER,
+      locked_until INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS login_rate_limits (
+      rate_key TEXT PRIMARY KEY,
+      attempt_count INTEGER NOT NULL DEFAULT 0,
+      window_started_at INTEGER NOT NULL,
+      blocked_until INTEGER
+    );
+  `);
+}
+
+function ensureReportingViews() {
+  db.exec(`
+    DROP VIEW IF EXISTS report_product_logs;
+    CREATE VIEW report_product_logs AS
+    SELECT
+      s.id AS log_id,
+      s.transaction_code AS transaction_code,
+      s.sale_date AS sale_date,
+      s.employee_name AS employee_name,
+      s.created_at AS time_stamp,
+      COALESCE(SUM(si.total), 0) AS total_amount
+    FROM sales s
+    INNER JOIN sale_items si ON si.sale_id = s.id
+    GROUP BY s.id, s.transaction_code, s.sale_date, s.employee_name, s.created_at;
+
+    DROP VIEW IF EXISTS report_eload_logs;
+    CREATE VIEW report_eload_logs AS
+    SELECT
+      id AS request_id,
+      request_code AS transaction_code,
+      mobile_number AS number,
+      network AS network,
+      COALESCE(load_value, request_kind, '') AS item_name,
+      amount AS amount,
+      COALESCE(completed_by_name, requested_by_name, 'System') AS employee_name,
+      date(datetime(COALESCE(completed_at, requested_at), '+8 hours')) AS sale_date,
+      COALESCE(completed_at, requested_at) AS time_stamp,
+      status,
+      requested_by_name,
+      requested_at,
+      completed_by_name,
+      completed_at,
+      failed_reason
+    FROM digital_service_requests
+    WHERE service_type = 'eload';
+
+    DROP VIEW IF EXISTS report_gcash_logs;
+    CREATE VIEW report_gcash_logs AS
+    SELECT
+      id AS request_id,
+      request_code AS transaction_code,
+      mobile_number AS number,
+      reference_no AS reference_no,
+      request_kind AS request_kind,
+      amount AS amount,
+      COALESCE(completed_by_name, requested_by_name, 'System') AS employee_name,
+      date(datetime(COALESCE(completed_at, requested_at), '+8 hours')) AS sale_date,
+      COALESCE(completed_at, requested_at) AS time_stamp,
+      status,
+      requested_by_name,
+      requested_at,
+      completed_by_name,
+      completed_at,
+      failed_reason
+    FROM digital_service_requests
+    WHERE service_type = 'gcash';
+  `);
 }
 
 function seedSuppliersFromInventory() {
@@ -325,232 +650,153 @@ function seedCategoriesFromInventory() {
   insertMany(names);
 }
 
-function syncDigitalRequestLogs() {
-  const requests = db.prepare(`
-    SELECT
-      request_code,
-      service_type,
-      status,
-      mobile_number,
-      amount,
-      request_kind,
-      network,
-      load_value,
-      reference_no,
-      requested_by_name,
-      requested_at,
-      completed_by_name,
-      completed_at
-    FROM digital_service_requests
-    ORDER BY id ASC
-  `).all();
+function seedEloadSettings() {
+  const existingCount = db.prepare("SELECT COUNT(*) AS count FROM eload_networks").get().count;
+  if (existingCount) return;
 
-  const gcashRequestCodes = requests
-    .filter((request) => String(request.service_type || "").toLowerCase() === "gcash")
-    .map((request) => String(request.request_code || "").trim())
-    .filter(Boolean);
-  const eloadRequestCodes = requests
-    .filter((request) => String(request.service_type || "").toLowerCase() === "eload")
-    .map((request) => String(request.request_code || "").trim())
-    .filter(Boolean);
-
-  const deleteGcashLog = db.prepare("DELETE FROM GCash_Log WHERE Transaction_Code = ?");
-  const deleteEloadLog = db.prepare("DELETE FROM ELoad_Log WHERE Transaction_Code = ?");
-  const insertGcashLog = db.prepare(`
-    INSERT INTO GCash_Log (Transaction_Code, Number, Reference_No, Cash_IN_OUT, Amount, Emp_Mng, Sale_Date)
-    VALUES (?, ?, ?, 'IN', ?, ?, ?)
-  `);
-  const insertEloadLog = db.prepare(`
-    INSERT INTO ELoad_Log (Transaction_Code, Number, Network, Item_Name, Amount, Emp_Mng, Sale_Date)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const syncTx = withTransaction(() => {
-    gcashRequestCodes.forEach((code) => deleteGcashLog.run(code));
-    eloadRequestCodes.forEach((code) => deleteEloadLog.run(code));
-
-    requests.forEach((request) => {
-      if (String(request.status || "").toLowerCase() !== "completed") return;
-
-      const requestCode = String(request.request_code || "").trim();
-      const serviceType = String(request.service_type || "").toLowerCase();
-      const saleDate = String(request.completed_at || request.requested_at || "").slice(0, 10) || toIsoDate(getTodayDate());
-      const employeeName = String(request.completed_by_name || request.requested_by_name || "System").trim();
-
-      if (serviceType === "gcash") {
-        insertGcashLog.run(
-          requestCode,
-          String(request.mobile_number || "").trim(),
-          String(request.reference_no || "").trim(),
-          Number(request.amount || 0),
-          employeeName,
-          saleDate
-        );
-        return;
-      }
-
-      if (serviceType === "eload") {
-        insertEloadLog.run(
-          requestCode,
-          String(request.mobile_number || "").trim(),
-          String(request.network || "").trim(),
-          String(request.load_value || request.request_kind || "").trim(),
-          Number(request.amount || 0),
-          employeeName,
-          saleDate
-        );
-      }
+  const insertNetwork = db.prepare("INSERT INTO eload_networks (network_name) VALUES (?)");
+  const insertPromo = db.prepare("INSERT INTO eload_promos (network_id, promo_name, selling_price) VALUES (?, ?, ?)");
+  const insertDefaults = withTransaction(() => {
+    Object.entries(defaultEloadNetworks).forEach(([networkName, promos]) => {
+      const result = insertNetwork.run(networkName);
+      const networkId = Number(result.lastInsertRowid);
+      promos.forEach((promoName) => {
+        insertPromo.run(networkId, promoName, parsePromoSellingPrice(promoName));
+      });
     });
   });
 
-  syncTx();
+  insertDefaults();
 }
 
-function nextDigitalServiceRequestCode(serviceType) {
+function buildSaleTransactionCode(saleId) {
+  return `S${String(saleId).padStart(4, "0")}`;
+}
+
+function buildDigitalServiceRequestCode(serviceType, requestId) {
   const prefix = String(serviceType || "").toLowerCase() === "gcash" ? "GC" : "EL";
-  const count = db.prepare("SELECT COUNT(*) AS count FROM digital_service_requests WHERE service_type = ?").get(serviceType).count + 1;
-  return `${prefix}${String(count).padStart(4, "0")}`;
+  return `${prefix}${String(requestId).padStart(4, "0")}`;
 }
 
 export function createSale({ saleDate, paymentMethod, items, digitalItems = [], skipStockValidation = false, employeeName = "System", number = "", referenceNo = "", requestedByUserId = null, completedByUserId = null }) {
-  const insertSale = db.prepare(`INSERT INTO sales (transaction_code, sale_date, payment_method, total_amount) VALUES (?, ?, ?, ?)`);
+  const insertSale = db.prepare(`INSERT INTO sales (transaction_code, sale_date, payment_method, employee_name, total_amount) VALUES (?, ?, ?, ?, ?)`);
+  const updateSaleCode = db.prepare("UPDATE sales SET transaction_code = ? WHERE id = ?");
   const insertSaleItem = db.prepare(`INSERT INTO sale_items (sale_id, inventory_item_id, item_name, quantity, price, total) VALUES (?, ?, ?, ?, ?, ?)`);
   const insertDigitalSaleItem = db.prepare(`
     INSERT INTO sale_digital_items (sale_id, service_type, request_code, mobile_number, network, load_type, load_value, notes, quantity, price, total)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const insertProductsLog = db.prepare(`INSERT INTO Products_Log (Transaction_Code, Total_Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?)`);
-  const insertSellingLogItem = db.prepare(`INSERT INTO Selling_Log_Items (Log_ID, Product_ID, Item_Name, Quantity, Selling_Price) VALUES (?, ?, ?, ?, ?)`);
-  const insertGcashLog = db.prepare(`INSERT INTO GCash_Log (Transaction_Code, Number, Reference_No, Cash_IN_OUT, Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?, ?, ?, ?)`);
-  const insertEloadLog = db.prepare(`INSERT INTO ELoad_Log (Transaction_Code, Number, Network, Item_Name, Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?, ?, ?, ?)`);
   const insertPendingDigitalServiceRequest = db.prepare(`
     INSERT INTO digital_service_requests
     (request_code, service_type, status, mobile_number, amount, request_kind, network, load_type, load_value, reference_no, notes, requested_by_user_id, requested_by_name)
     VALUES (?, ?, 'Pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
+  const updateDigitalServiceRequestCode = db.prepare("UPDATE digital_service_requests SET request_code = ? WHERE id = ?");
 
   const createTx = withTransaction((payload) => {
     const productSaleItems = Array.isArray(payload.items) ? payload.items : [];
     const digitalSaleItems = Array.isArray(payload.digitalItems) ? payload.digitalItems : [];
     const totalAmount = [...productSaleItems, ...digitalSaleItems].reduce((sum, item) => sum + Number(item.total || 0), 0);
-    const saleCount = db.prepare("SELECT COUNT(*) AS count FROM sales").get().count + 1;
-    const transactionCode = `S${String(saleCount).padStart(4, "0")}`;
-    const saleResult = insertSale.run(transactionCode, payload.saleDate, payload.paymentMethod, totalAmount);
-    const saleId = saleResult.lastInsertRowid;
-    const activeEmployeeName = String(payload.employeeName || "System");
-      const productItems = [];
-      const eloadItems = [];
+    const activeEmployeeName = String(payload.employeeName || "System").trim() || "System";
+    const saleResult = insertSale.run(`TMP-${crypto.randomUUID()}`, payload.saleDate, payload.paymentMethod, activeEmployeeName, totalAmount);
+    const saleId = Number(saleResult.lastInsertRowid);
+    const transactionCode = buildSaleTransactionCode(saleId);
+    updateSaleCode.run(transactionCode, saleId);
 
-      for (const item of productSaleItems) {
-        const currentInventory = db.prepare("SELECT id, name, category, status FROM inventory_items WHERE id = ?").get(item.inventoryItemId);
-        if (!currentInventory) throw new Error("One of the sale items does not exist.");
-        if (normalizeItemStatus(currentInventory.status) === "Out of Stock") {
-          throw new Error(`${currentInventory.name} is marked out of stock.`);
-        }
-        insertSaleItem.run(saleId, item.inventoryItemId, currentInventory.name, item.quantity, item.price, item.total);
-
-        const category = String(currentInventory.category || "").toLowerCase();
-      const normalizedItem = {
-        inventoryItemId: currentInventory.id,
-        itemName: currentInventory.name,
-        category: currentInventory.category,
-        quantity: item.quantity,
-        price: item.price,
-        total: item.total
-      };
-
-      if (category.includes("load")) {
-        eloadItems.push(normalizedItem);
-      } else {
-        productItems.push(normalizedItem);
-      }
+    function createPendingDigitalRequest({
+      serviceType,
+      mobileNumber,
+      amount,
+      requestKind = "",
+      network = "",
+      loadType = "",
+      loadValue = "",
+      notes = ""
+    }) {
+      const requestResult = insertPendingDigitalServiceRequest.run(
+        `TMP-${crypto.randomUUID()}`,
+        serviceType,
+        mobileNumber,
+        amount,
+        requestKind,
+        network,
+        loadType,
+        loadValue,
+        "",
+        notes,
+        payload.requestedByUserId ? Number(payload.requestedByUserId) : null,
+        activeEmployeeName
+      );
+      const requestId = Number(requestResult.lastInsertRowid);
+      const requestCode = buildDigitalServiceRequestCode(serviceType, requestId);
+      updateDigitalServiceRequestCode.run(requestCode, requestId);
+      return requestCode;
     }
 
-    if (productItems.length) {
-      const productTotal = productItems.reduce((sum, item) => sum + Number(item.total || 0), 0);
-      const productLogResult = insertProductsLog.run(transactionCode, productTotal, activeEmployeeName, payload.saleDate);
-      for (const item of productItems) {
-        insertSellingLogItem.run(productLogResult.lastInsertRowid, item.inventoryItemId, item.itemName, item.quantity, item.price);
+    for (const item of productSaleItems) {
+      const currentInventory = db.prepare("SELECT id, name, category, status FROM inventory_items WHERE id = ?").get(item.inventoryItemId);
+      if (!currentInventory) throw new Error("One of the sale items does not exist.");
+      if (normalizeItemStatus(currentInventory.status) === "Out of Stock") {
+        throw new Error(`${currentInventory.name} is marked out of stock.`);
       }
+      insertSaleItem.run(saleId, item.inventoryItemId, currentInventory.name, item.quantity, item.price, item.total);
     }
 
-    if (String(payload.paymentMethod || "").toLowerCase() === "gcash") {
-      insertGcashLog.run(transactionCode, String(payload.number || ""), String(payload.referenceNo || ""), "IN", totalAmount, activeEmployeeName, payload.saleDate);
+    for (const item of digitalSaleItems) {
+      const mobileNumber = String(item.mobileNumber || payload.number || "").trim();
+      const network = String(item.network || "").trim();
+      const loadType = String(item.loadType || "").trim();
+      const loadValue = String(item.loadValue || "").trim();
+      const notes = String(item.notes || "").trim();
+      const quantity = Math.max(1, Number(item.quantity) || 1);
+      const price = Number(item.price || 0);
+      const total = Number(item.total || price * quantity);
+      if (!mobileNumber) throw new Error("Digital service item is missing a mobile number.");
+      if (!network) throw new Error("Digital service item is missing a network.");
+      if (!loadValue) throw new Error("Digital service item is missing a load value.");
+      if (total <= 0) throw new Error("Digital service amount must be greater than zero.");
+
+      const requestCode = createPendingDigitalRequest({
+        serviceType: "eload",
+        mobileNumber,
+        amount: total,
+        network,
+        loadType,
+        loadValue,
+        notes
+      });
+      insertDigitalSaleItem.run(
+        saleId,
+        "eload",
+        requestCode,
+        mobileNumber,
+        network,
+        loadType,
+        loadValue,
+        notes,
+        quantity,
+        price,
+        total
+      );
     }
-
-    for (const item of eloadItems) {
-        insertEloadLog.run(
-          transactionCode,
-          String(payload.number || ""),
-        String(item.category || item.itemName || ""),
-        item.itemName,
-        item.total,
-        activeEmployeeName,
-          payload.saleDate
-        );
-      }
-
-      for (const item of digitalSaleItems) {
-        const mobileNumber = String(item.mobileNumber || payload.number || "").trim();
-        const network = String(item.network || "").trim();
-        const loadType = String(item.loadType || "").trim();
-        const loadValue = String(item.loadValue || "").trim();
-        const notes = String(item.notes || "").trim();
-        const quantity = Math.max(1, Number(item.quantity) || 1);
-        const price = Number(item.price || 0);
-        const total = Number(item.total || price * quantity);
-        if (!mobileNumber) throw new Error("Digital service item is missing a mobile number.");
-        if (!network) throw new Error("Digital service item is missing a network.");
-        if (!loadValue) throw new Error("Digital service item is missing a load value.");
-        if (total <= 0) throw new Error("Digital service amount must be greater than zero.");
-
-        const requestCode = nextDigitalServiceRequestCode("eload");
-        insertPendingDigitalServiceRequest.run(
-          requestCode,
-          "eload",
-          mobileNumber,
-          total,
-          "",
-          network,
-          loadType,
-          loadValue,
-          "",
-          notes,
-          payload.requestedByUserId ? Number(payload.requestedByUserId) : null,
-          activeEmployeeName
-        );
-        insertDigitalSaleItem.run(
-          saleId,
-          "eload",
-          requestCode,
-          mobileNumber,
-          network,
-          loadType,
-          loadValue,
-          notes,
-          quantity,
-          price,
-          total
-        );
-        insertEloadLog.run(transactionCode, mobileNumber, network, loadValue, total, activeEmployeeName, payload.saleDate);
-      }
-    });
+  });
 
     createTx({ saleDate, paymentMethod, items, digitalItems, employeeName, number, referenceNo, requestedByUserId, completedByUserId });
   }
 
 export function createDigitalServiceRequest(input) {
   const serviceType = String(input.serviceType || "").trim().toLowerCase() === "gcash" ? "gcash" : "eload";
-  const requestCode = nextDigitalServiceRequestCode(serviceType);
   const amount = Number(input.amount || 0);
   if (amount <= 0) throw new Error("Amount must be greater than zero.");
-
-  db.prepare(`
+  const insertRequest = db.prepare(`
     INSERT INTO digital_service_requests
     (request_code, service_type, status, mobile_number, amount, request_kind, network, load_type, load_value, reference_no, notes, requested_by_user_id, requested_by_name)
     VALUES (?, ?, 'Pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    requestCode,
+  `);
+  const updateRequestCode = db.prepare("UPDATE digital_service_requests SET request_code = ? WHERE id = ?");
+
+  const requestResult = insertRequest.run(
+    `TMP-${crypto.randomUUID()}`,
     serviceType,
     String(input.mobileNumber || "").trim(),
     amount,
@@ -563,6 +809,9 @@ export function createDigitalServiceRequest(input) {
     input.requestedByUserId ? Number(input.requestedByUserId) : null,
     String(input.requestedByName || "System").trim()
   );
+  const requestId = Number(requestResult.lastInsertRowid);
+  const requestCode = buildDigitalServiceRequestCode(serviceType, requestId);
+  updateRequestCode.run(requestCode, requestId);
 }
 
 export function completeDigitalServiceRequest(requestId, input) {
@@ -577,7 +826,6 @@ export function completeDigitalServiceRequest(requestId, input) {
     throw new Error("GCash completion requires a reference number.");
   }
   const completedByName = String(input.completedByName || "System").trim();
-  const completedSaleDate = toIsoDate(getTodayDate());
 
   const completeTx = withTransaction(() => {
     db.prepare(`
@@ -593,34 +841,6 @@ export function completeDigitalServiceRequest(requestId, input) {
       input.completedByUserId ? Number(input.completedByUserId) : null,
       completedByName,
       requestId
-    );
-
-    if (serviceType === "gcash") {
-      db.prepare(`
-        INSERT INTO GCash_Log (Transaction_Code, Number, Reference_No, Cash_IN_OUT, Amount, Emp_Mng, Sale_Date)
-        VALUES (?, ?, ?, 'IN', ?, ?, ?)
-      `).run(
-        String(request.request_code || "").trim(),
-        String(request.mobile_number || "").trim(),
-        referenceNo,
-        Number(request.amount || 0),
-        completedByName,
-        completedSaleDate
-      );
-      return;
-    }
-
-    db.prepare(`
-      INSERT INTO ELoad_Log (Transaction_Code, Number, Network, Item_Name, Amount, Emp_Mng, Sale_Date)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      String(request.request_code || "").trim(),
-      String(request.mobile_number || "").trim(),
-      String(request.network || "").trim(),
-      String(request.load_value || request.request_kind || "").trim(),
-      Number(request.amount || 0),
-      completedByName,
-      completedSaleDate
     );
   });
 
@@ -663,67 +883,13 @@ export function listDigitalServiceRequests() {
   }));
 }
 
-function backfillLogTablesFromSales() {
-  const hasProductLogs = db.prepare("SELECT COUNT(*) AS count FROM Products_Log").get().count > 0;
-  const hasGcashLogs = db.prepare("SELECT COUNT(*) AS count FROM GCash_Log").get().count > 0;
-  const hasEloadLogs = db.prepare("SELECT COUNT(*) AS count FROM ELoad_Log").get().count > 0;
-  if (hasProductLogs || hasGcashLogs || hasEloadLogs) return;
-
-  const sales = listSales("all");
-  const insertProductsLog = db.prepare(`INSERT INTO Products_Log (Transaction_Code, Total_Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?)`);
-  const insertSellingLogItem = db.prepare(`INSERT INTO Selling_Log_Items (Log_ID, Product_ID, Item_Name, Quantity, Selling_Price) VALUES (?, ?, ?, ?, ?)`);
-  const insertGcashLog = db.prepare(`INSERT INTO GCash_Log (Transaction_Code, Number, Reference_No, Cash_IN_OUT, Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?, ?, ?, ?)`);
-  const insertEloadLog = db.prepare(`INSERT INTO ELoad_Log (Transaction_Code, Number, Network, Item_Name, Amount, Emp_Mng, Sale_Date) VALUES (?, ?, ?, ?, ?, ?, ?)`);
-
-  withTransaction(() => {
-    sales.forEach((sale) => {
-      const productItems = [];
-      const eloadItems = [];
-
-      sale.items.forEach((item) => {
-        const inventoryItem = db.prepare("SELECT id, category FROM inventory_items WHERE id = ?").get(item.inventory_item_id);
-        const category = String(inventoryItem?.category || "").toLowerCase();
-        const normalizedItem = {
-          inventoryItemId: Number(item.inventory_item_id),
-          itemName: item.item_name,
-          category: inventoryItem?.category || "",
-          quantity: Number(item.quantity || 0),
-          price: Number(item.price || 0),
-          total: Number(item.total || 0)
-        };
-
-        if (category.includes("load")) {
-          eloadItems.push(normalizedItem);
-        } else {
-          productItems.push(normalizedItem);
-        }
-      });
-
-      if (productItems.length) {
-        const productTotal = productItems.reduce((sum, item) => sum + item.total, 0);
-        const productLogResult = insertProductsLog.run(sale.transaction_code, productTotal, "System", sale.sale_date);
-        productItems.forEach((item) => {
-          insertSellingLogItem.run(productLogResult.lastInsertRowid, item.inventoryItemId, item.itemName, item.quantity, item.price);
-        });
-      }
-
-      if (String(sale.payment_method || "").toLowerCase() === "gcash") {
-        insertGcashLog.run(sale.transaction_code, "", "", "IN", Number(sale.total_amount || 0), "System", sale.sale_date);
-      }
-
-      eloadItems.forEach((item) => {
-        insertEloadLog.run(sale.transaction_code, "", String(item.category || item.itemName || ""), item.itemName, item.total, "System", sale.sale_date);
-      });
-    });
-  })();
-}
-
-function seedDefaults() {
+async function seedDefaults() {
   const insertDefaultUser = db.prepare(`
-    INSERT INTO users (username, full_name, role, email, phone, password_hash, plain_password, pin_hash)
+    INSERT INTO users (username, full_name, role, email, phone, password_hash, pin_hash, must_change_password)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const findUserByUsername = db.prepare("SELECT id FROM users WHERE username = ?");
+  const seededAdminPassword = getSeedAdminPassword();
   const defaultUsers = [
     {
       username: "admin",
@@ -731,7 +897,8 @@ function seedDefaults() {
       role: "Admin",
       email: "owner@sarisaristore.com",
       phone: "+63 912 345 6789",
-      password: "admin123"
+      password: seededAdminPassword || "admin123",
+      mustChangePassword: seededAdminPassword ? 0 : 1
     },
     {
       username: "user",
@@ -739,27 +906,26 @@ function seedDefaults() {
       role: "User",
       email: "user@sarisaristore.com",
       phone: "+63 912 345 6790",
-      password: "user123"
+      password: "user123",
+      mustChangePassword: 0
     }
   ];
 
   for (const user of defaultUsers) {
     if (!findUserByUsername.get(user.username)) {
+      const passwordHash = await hashPassword(user.password);
       insertDefaultUser.run(
         user.username,
         user.fullName,
         user.role,
         user.email,
         user.phone,
-        hashPassword(user.password),
-        user.password,
-        ""
+        passwordHash,
+        "",
+        user.mustChangePassword
       );
     }
   }
-
-  // Remove PINs for all users as requested
-  db.exec("UPDATE users SET pin_hash = ''");
 
   if (!db.prepare("SELECT COUNT(*) AS count FROM store_settings").get().count) {
     db.prepare(`
@@ -770,10 +936,11 @@ function seedDefaults() {
   }
 
   if (!db.prepare("SELECT COUNT(*) AS count FROM inventory_items").get().count) {
-    const insertItem = db.prepare(`INSERT INTO inventory_items (name, category, supplier, stock_quantity, unit_price, selling_price, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+    const insertItem = db.prepare(`INSERT INTO inventory_items (barcode, name, category, supplier, stock_quantity, unit_price, selling_price, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+    const usedBarcodes = new Set();
     const insertMany = withTransaction((items) => {
-      for (const item of items) {
-        insertItem.run(item.name, item.category, item.supplier || "", item.stockQuantity, item.unitPrice, item.sellingPrice, item.reorderLevel);
+      for (const [index, item] of items.entries()) {
+        insertItem.run(buildUniqueSeedBarcode(item, usedBarcodes, index), item.name, item.category, item.supplier || "", item.stockQuantity, item.unitPrice, item.sellingPrice, item.reorderLevel);
       }
     });
     insertMany(seedInventoryItems);
@@ -795,41 +962,185 @@ function seedMissingInventoryItems() {
     db.prepare("SELECT name FROM inventory_items").all()
       .map((row) => String(row.name || "").trim().toLowerCase())
   );
-  const insertItem = db.prepare(`INSERT INTO inventory_items (name, category, supplier, stock_quantity, unit_price, selling_price, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?)`);
-  const missingItems = seedInventoryItems.filter((item) => !existingNames.has(String(item.name || "").trim().toLowerCase()));
+  const usedBarcodes = new Set(
+    db.prepare("SELECT barcode FROM inventory_items WHERE TRIM(COALESCE(barcode, '')) <> ''").all()
+      .map((row) => normalizeBarcode(row.barcode))
+      .filter(Boolean)
+  );
+  const insertItem = db.prepare(`INSERT INTO inventory_items (barcode, name, category, supplier, stock_quantity, unit_price, selling_price, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+  const missingItems = seedInventoryItems
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => !existingNames.has(String(item.name || "").trim().toLowerCase()));
   if (!missingItems.length) return;
 
   const insertMany = withTransaction((items) => {
-    for (const item of items) {
-      insertItem.run(item.name, item.category, item.supplier || "", item.stockQuantity, item.unitPrice, item.sellingPrice, item.reorderLevel);
+    for (const { item, index } of items) {
+      const barcode = buildUniqueSeedBarcode(item, usedBarcodes, index);
+      insertItem.run(barcode, item.name, item.category, item.supplier || "", item.stockQuantity, item.unitPrice, item.sellingPrice, item.reorderLevel);
     }
   });
   insertMany(missingItems);
 }
 
-export function initializeDatabase() {
+export async function initializeDatabase() {
   createSchema();
   ensureUserSchema();
   ensureInventorySchema();
+  ensureSalesSchema();
   ensureDigitalServiceRequestSchema();
-  seedDefaults();
+  ensureAuthSecuritySchema();
+  ensureReportingViews();
+  await seedDefaults();
   seedMissingInventoryItems();
   seedSuppliersFromInventory();
   seedCategoriesFromInventory();
-  backfillLogTablesFromSales();
-  syncDigitalRequestLogs();
+  seedEloadSettings();
 }
 
 export function getUserByUsername(username) {
-  return db.prepare("SELECT * FROM users WHERE username = ?").get(username);
+  return db.prepare("SELECT id, username, full_name, role, email, phone, must_change_password FROM users WHERE username = ?").get(username);
 }
 
 export function getUserById(id) {
-  return db.prepare("SELECT * FROM users WHERE id = ?").get(id);
+  return db.prepare("SELECT id, username, full_name, role, email, phone, must_change_password FROM users WHERE id = ?").get(id);
+}
+
+export function getUserAuthByUsername(username) {
+  return db.prepare("SELECT id, username, full_name, role, email, phone, password_hash, pin_hash, must_change_password FROM users WHERE username = ?").get(username);
+}
+
+export function getUserAuthById(id) {
+  return db.prepare("SELECT id, username, full_name, role, email, phone, password_hash, pin_hash, must_change_password FROM users WHERE id = ?").get(id);
+}
+
+function normalizeLoginIdentity(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizeRateLimitKey(value) {
+  return String(value || "").trim() || "unknown";
+}
+
+export function getLoginProtectionState(username, rateLimitKey, now = Date.now()) {
+  const normalizedUsername = normalizeLoginIdentity(username);
+  const normalizedRateLimitKey = normalizeRateLimitKey(rateLimitKey);
+  const accountState = normalizedUsername
+    ? db.prepare("SELECT failed_attempts, first_failed_at, locked_until FROM user_login_security WHERE username = ?").get(normalizedUsername)
+    : null;
+  const rateLimitState = db.prepare("SELECT attempt_count, window_started_at, blocked_until FROM login_rate_limits WHERE rate_key = ?").get(normalizedRateLimitKey);
+
+  let accountLockedUntil = Number(accountState?.locked_until || 0);
+  let rateLimitedUntil = Number(rateLimitState?.blocked_until || 0);
+
+  if (accountLockedUntil && accountLockedUntil <= now) {
+    db.prepare("DELETE FROM user_login_security WHERE username = ?").run(normalizedUsername);
+    accountLockedUntil = 0;
+  }
+
+  if (rateLimitState) {
+    const windowStartedAt = Number(rateLimitState.window_started_at || 0);
+    if (rateLimitedUntil && rateLimitedUntil <= now) {
+      db.prepare("DELETE FROM login_rate_limits WHERE rate_key = ?").run(normalizedRateLimitKey);
+      rateLimitedUntil = 0;
+    } else if (!rateLimitedUntil && (now - windowStartedAt) > LOGIN_RATE_LIMIT_WINDOW_MS) {
+      db.prepare("DELETE FROM login_rate_limits WHERE rate_key = ?").run(normalizedRateLimitKey);
+    }
+  }
+
+  return {
+    accountLocked: Boolean(accountLockedUntil && accountLockedUntil > now),
+    accountLockedUntil,
+    rateLimited: Boolean(rateLimitedUntil && rateLimitedUntil > now),
+    rateLimitedUntil
+  };
+}
+
+export function recordFailedLoginAttempt(username, rateLimitKey, now = Date.now()) {
+  const normalizedUsername = normalizeLoginIdentity(username);
+  const normalizedRateLimitKey = normalizeRateLimitKey(rateLimitKey);
+
+  const rateLimitState = db.prepare("SELECT attempt_count, window_started_at, blocked_until FROM login_rate_limits WHERE rate_key = ?").get(normalizedRateLimitKey);
+  let attemptCount = 1;
+  let windowStartedAt = now;
+  let blockedUntil = 0;
+
+  if (rateLimitState) {
+    const existingWindowStartedAt = Number(rateLimitState.window_started_at || 0);
+    if ((Number(rateLimitState.blocked_until || 0) > now)) {
+      blockedUntil = Number(rateLimitState.blocked_until);
+      attemptCount = Number(rateLimitState.attempt_count || 0);
+      windowStartedAt = existingWindowStartedAt || now;
+    } else if ((now - existingWindowStartedAt) <= LOGIN_RATE_LIMIT_WINDOW_MS) {
+      attemptCount = Number(rateLimitState.attempt_count || 0) + 1;
+      windowStartedAt = existingWindowStartedAt || now;
+    }
+  }
+
+  if (!blockedUntil && attemptCount >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS) {
+    blockedUntil = now + LOGIN_RATE_LIMIT_BLOCK_MS;
+  }
+
+  db.prepare(`
+    INSERT INTO login_rate_limits (rate_key, attempt_count, window_started_at, blocked_until)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(rate_key) DO UPDATE SET
+      attempt_count = excluded.attempt_count,
+      window_started_at = excluded.window_started_at,
+      blocked_until = excluded.blocked_until
+  `).run(normalizedRateLimitKey, attemptCount, windowStartedAt, blockedUntil || null);
+
+  let accountLockedUntil = 0;
+  if (normalizedUsername) {
+    const accountState = db.prepare("SELECT failed_attempts, first_failed_at, locked_until FROM user_login_security WHERE username = ?").get(normalizedUsername);
+    let failedAttempts = 1;
+    let firstFailedAt = now;
+
+    if (accountState) {
+      const existingFirstFailedAt = Number(accountState.first_failed_at || 0);
+      const existingLockedUntil = Number(accountState.locked_until || 0);
+      if (existingLockedUntil > now) {
+        failedAttempts = Number(accountState.failed_attempts || 0);
+        firstFailedAt = existingFirstFailedAt || now;
+        accountLockedUntil = existingLockedUntil;
+      } else if ((now - existingFirstFailedAt) <= LOGIN_ACCOUNT_WINDOW_MS) {
+        failedAttempts = Number(accountState.failed_attempts || 0) + 1;
+        firstFailedAt = existingFirstFailedAt || now;
+      }
+    }
+
+    if (!accountLockedUntil && failedAttempts >= LOGIN_ACCOUNT_MAX_ATTEMPTS) {
+      accountLockedUntil = now + LOGIN_ACCOUNT_LOCK_MS;
+    }
+
+    db.prepare(`
+      INSERT INTO user_login_security (username, failed_attempts, first_failed_at, locked_until)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(username) DO UPDATE SET
+        failed_attempts = excluded.failed_attempts,
+        first_failed_at = excluded.first_failed_at,
+        locked_until = excluded.locked_until
+    `).run(normalizedUsername, failedAttempts, firstFailedAt, accountLockedUntil || null);
+  }
+
+  return {
+    accountLocked: Boolean(accountLockedUntil && accountLockedUntil > now),
+    accountLockedUntil,
+    rateLimited: Boolean(blockedUntil && blockedUntil > now),
+    rateLimitedUntil: blockedUntil
+  };
+}
+
+export function clearFailedLoginAttempts(username, rateLimitKey) {
+  const normalizedUsername = normalizeLoginIdentity(username);
+  const normalizedRateLimitKey = normalizeRateLimitKey(rateLimitKey);
+  if (normalizedUsername) {
+    db.prepare("DELETE FROM user_login_security WHERE username = ?").run(normalizedUsername);
+  }
+  db.prepare("DELETE FROM login_rate_limits WHERE rate_key = ?").run(normalizedRateLimitKey);
 }
 
 export function listUsers() {
-  return db.prepare("SELECT id, username, full_name, role, email, phone, plain_password FROM users ORDER BY full_name, username").all();
+  return db.prepare("SELECT id, username, full_name, role, email, phone, must_change_password FROM users ORDER BY full_name, username").all();
 }
 
 export function listSuppliers() {
@@ -936,6 +1247,84 @@ export function deleteCategory(categoryId) {
   db.prepare("DELETE FROM categories WHERE category_id = ?").run(categoryId);
 }
 
+export function listEloadNetworks() {
+  const networks = db.prepare(`
+    SELECT network_id, network_name
+    FROM eload_networks
+    ORDER BY network_name COLLATE NOCASE, network_id
+  `).all();
+  const promos = db.prepare(`
+    SELECT promo_id, network_id, promo_name, selling_price
+    FROM eload_promos
+    ORDER BY promo_name COLLATE NOCASE, promo_id
+  `).all();
+  const promosByNetwork = new Map();
+  promos.forEach((promo) => {
+    const networkPromos = promosByNetwork.get(promo.network_id) || [];
+    networkPromos.push({ ...promo, selling_price: Number(promo.selling_price || 0) });
+    promosByNetwork.set(promo.network_id, networkPromos);
+  });
+  return networks.map((network) => ({
+    ...network,
+    promos: promosByNetwork.get(network.network_id) || []
+  }));
+}
+
+export function getEloadPromoCatalog() {
+  return listEloadNetworks().reduce((catalog, network) => {
+    catalog[network.network_name] = network.promos.map((promo) => ({
+      name: promo.promo_name,
+      price: Number(promo.selling_price || 0)
+    }));
+    return catalog;
+  }, {});
+}
+
+export function createEloadNetwork(input) {
+  const networkName = String(input.networkName || "").trim().toUpperCase();
+  if (!networkName) throw new Error("Network name is required.");
+  if (db.prepare("SELECT 1 FROM eload_networks WHERE lower(network_name) = lower(?)").get(networkName)) {
+    throw new Error("Network already exists.");
+  }
+  db.prepare("INSERT INTO eload_networks (network_name) VALUES (?)").run(networkName);
+}
+
+export function deleteEloadNetwork(networkId) {
+  const network = db.prepare("SELECT network_id FROM eload_networks WHERE network_id = ?").get(networkId);
+  if (!network) throw new Error("Network not found.");
+  db.prepare("DELETE FROM eload_networks WHERE network_id = ?").run(networkId);
+}
+
+export function createEloadPromo(input) {
+  const networkId = Number(input.networkId);
+  const promoName = String(input.promoName || "").trim();
+  const sellingPrice = Number(input.sellingPrice || 0);
+  if (!db.prepare("SELECT 1 FROM eload_networks WHERE network_id = ?").get(networkId)) {
+    throw new Error("Network not found.");
+  }
+  if (!promoName) throw new Error("Promo name is required.");
+  if (sellingPrice <= 0) throw new Error("Selling price must be greater than zero.");
+  db.prepare("INSERT INTO eload_promos (network_id, promo_name, selling_price) VALUES (?, ?, ?)")
+    .run(networkId, promoName, sellingPrice);
+}
+
+export function updateEloadPromo(promoId, input) {
+  const promoName = String(input.promoName || "").trim();
+  const sellingPrice = Number(input.sellingPrice || 0);
+  const promo = db.prepare("SELECT promo_id, network_id FROM eload_promos WHERE promo_id = ?").get(promoId);
+  if (!promo) throw new Error("Promo not found.");
+  if (!promoName) throw new Error("Promo name is required.");
+  if (sellingPrice <= 0) throw new Error("Selling price must be greater than zero.");
+  db.prepare("UPDATE eload_promos SET promo_name = ?, selling_price = ? WHERE promo_id = ?")
+    .run(promoName, sellingPrice, promoId);
+}
+
+export function deleteEloadPromo(promoId) {
+  const promo = db.prepare("SELECT promo_id FROM eload_promos WHERE promo_id = ?").get(promoId);
+  if (!promo) throw new Error("Promo not found.");
+  db.prepare("DELETE FROM eload_promos WHERE promo_id = ?").run(promoId);
+}
+
 export function getStoreSettings() {
   return db.prepare("SELECT * FROM store_settings WHERE id = 1").get();
 }
@@ -949,22 +1338,22 @@ export function updateUserProfile(userId, input) {
   db.prepare(`UPDATE users SET full_name = ?, email = ?, phone = ? WHERE id = ?`).run(input.fullName, input.email, input.phone, userId);
 }
 
-export function createUserAccount(input) {
+export async function createUserAccount(input) {
+  const passwordHash = await hashPassword(input.password);
   db.prepare(`
-    INSERT INTO users (username, full_name, role, email, phone, password_hash, plain_password, pin_hash)
-    VALUES (?, ?, ?, ?, ?, ?, ?, '')
+    INSERT INTO users (username, full_name, role, email, phone, password_hash, pin_hash, must_change_password)
+    VALUES (?, ?, ?, ?, ?, ?, '', 0)
   `).run(
     input.username,
     input.fullName,
     input.role,
     input.email,
     input.phone,
-    hashPassword(input.password),
-    input.password
+    passwordHash
   );
 }
 
-export function updateUserAccount(userId, input) {
+export async function updateUserAccount(userId, input) {
   db.prepare(`
     UPDATE users
     SET username = ?, full_name = ?, role = ?, email = ?, phone = ?
@@ -972,7 +1361,7 @@ export function updateUserAccount(userId, input) {
   `).run(input.username, input.fullName, input.role, input.email, input.phone, userId);
 
   if (input.password) {
-    updatePassword(userId, input.password);
+    await updatePassword(userId, input.password);
   }
 }
 
@@ -980,8 +1369,9 @@ export function updateUserPin(userId, newPin) {
   // No-op as PINs are removed
 }
 
-export function updatePassword(userId, newPassword) {
-  db.prepare("UPDATE users SET password_hash = ?, plain_password = ? WHERE id = ?").run(hashPassword(newPassword), newPassword, userId);
+export async function updatePassword(userId, newPassword) {
+  const passwordHash = await hashPassword(newPassword);
+  db.prepare("UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?").run(passwordHash, userId);
 }
 
 export function updateNotifications(input) {
@@ -994,9 +1384,9 @@ export function listInventory(search = "", status = "all") {
   const items = db.prepare(`
     SELECT *
     FROM inventory_items
-    WHERE name LIKE ? OR category LIKE ? OR supplier LIKE ?
+    WHERE name LIKE ? OR category LIKE ? OR supplier LIKE ? OR barcode LIKE ?
     ORDER BY name
-  `).all(pattern, pattern, pattern).map((row) => ({
+  `).all(pattern, pattern, pattern, pattern).map((row) => ({
     ...row,
     status: normalizeItemStatus(row.status),
     profit: row.selling_price - row.unit_price
@@ -1020,25 +1410,55 @@ export function getInventorySummary() {
 }
 
 export function addInventoryItem(input) {
+  const barcode = normalizeBarcode(input.barcode);
+  if (!barcode) throw new Error("Barcode is required.");
+  if (db.prepare("SELECT 1 FROM inventory_items WHERE barcode = ?").get(barcode)) {
+    throw new Error("Barcode already exists.");
+  }
+
   const category = String(input.category || "").trim();
   if (!category) throw new Error("Category is required.");
   if (!db.prepare("SELECT 1 FROM categories WHERE category_name = ?").get(category)) {
     throw new Error("Choose a valid category from Settings.");
   }
 
-  db.prepare(`INSERT INTO inventory_items (name, category, supplier, status, stock_quantity, unit_price, selling_price, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(input.name, category, String(input.supplier || "").trim(), normalizeItemStatus(input.status), 0, Number(input.unitPrice), Number(input.sellingPrice), 0);
+  db.prepare(`INSERT INTO inventory_items (barcode, name, category, supplier, status, stock_quantity, unit_price, selling_price, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(barcode, input.name, category, String(input.supplier || "").trim(), normalizeItemStatus(input.status), 0, Number(input.unitPrice), Number(input.sellingPrice), 0);
 }
 
 export function updateInventoryItem(id, input) {
+  const barcode = normalizeBarcode(input.barcode);
+  if (!barcode) throw new Error("Barcode is required.");
+  if (db.prepare("SELECT 1 FROM inventory_items WHERE barcode = ? AND id != ?").get(barcode, id)) {
+    throw new Error("Barcode already exists.");
+  }
+
   const category = String(input.category || "").trim();
   if (!category) throw new Error("Category is required.");
   if (!db.prepare("SELECT 1 FROM categories WHERE category_name = ?").get(category)) {
     throw new Error("Choose a valid category from Settings.");
   }
 
-  db.prepare(`UPDATE inventory_items SET name = ?, category = ?, supplier = ?, status = ?, stock_quantity = ?, unit_price = ?, selling_price = ?, reorder_level = ? WHERE id = ?`)
-    .run(input.name, category, String(input.supplier || "").trim(), normalizeItemStatus(input.status), 0, Number(input.unitPrice), Number(input.sellingPrice), 0, id);
+  db.prepare(`UPDATE inventory_items SET barcode = ?, name = ?, category = ?, supplier = ?, status = ?, stock_quantity = ?, unit_price = ?, selling_price = ?, reorder_level = ? WHERE id = ?`)
+    .run(barcode, input.name, category, String(input.supplier || "").trim(), normalizeItemStatus(input.status), 0, Number(input.unitPrice), Number(input.sellingPrice), 0, id);
+}
+
+export function updateInventoryItemStatus(id, status) {
+  const item = db.prepare("SELECT id FROM inventory_items WHERE id = ?").get(id);
+  if (!item) throw new Error("Item not found.");
+  db.prepare("UPDATE inventory_items SET status = ? WHERE id = ?").run(normalizeItemStatus(status), id);
+}
+
+export function getInventoryItemByBarcode(barcode) {
+  const normalizedBarcode = normalizeBarcode(barcode);
+  if (!normalizedBarcode) return null;
+  const item = db.prepare("SELECT * FROM inventory_items WHERE barcode = ?").get(normalizedBarcode);
+  if (!item) return null;
+  return {
+    ...item,
+    status: normalizeItemStatus(item.status),
+    profit: item.selling_price - item.unit_price
+  };
 }
 
 export function deleteInventoryItem(id) {
@@ -1158,6 +1578,7 @@ export function getDashboardData() {
   const salesMetrics = getSalesMetrics();
   const bestSelling = getBestSellingData();
   const chartData = getDashboardChartData();
+  const reportsData = getReportsData();
   const gcashMonthly = chartData.datasets.find((dataset) => dataset.label === "GCash")?.values.reduce((sum, value) => sum + Number(value || 0), 0) || 0;
   const loadMonthly = chartData.datasets.find((dataset) => dataset.label === "Load")?.values.reduce((sum, value) => sum + Number(value || 0), 0) || 0;
   const productsMonthly = chartData.datasets.find((dataset) => dataset.label === "Products")?.values.reduce((sum, value) => sum + Number(value || 0), 0) || 0;
@@ -1168,14 +1589,6 @@ export function getDashboardData() {
   const pendingGcashRequests = listDigitalServiceRequests()
     .filter((request) => request.status === "Pending" && request.service_type === "gcash")
     .slice(0, 5);
-  const dailySeries = [];
-
-  for (let offset = 6; offset >= 0; offset -= 1) {
-    const current = shiftDate(getTodayDate(), -offset);
-    const dateKey = toIsoDate(current);
-    const total = db.prepare("SELECT COALESCE(SUM(total_amount), 0) AS total FROM sales WHERE sale_date = ?").get(dateKey).total;
-    dailySeries.push({ label: current.toLocaleDateString("en-US", { weekday: "short" }), total });
-  }
 
   return {
     metrics: {
@@ -1183,13 +1596,21 @@ export function getDashboardData() {
       lowStockItems: summary.lowStock,
       outOfStockItems: summary.outOfStock,
       dailySales: salesMetrics.todayTotal,
-      monthlySales: combinedMonthly
+      monthlySales: combinedMonthly,
+      monthlyProducts: productsMonthly,
+      monthlyLoad: loadMonthly,
+      monthlyGcash: gcashMonthly,
+      totalRevenue: reportsData.totalRevenue,
+      averageDaily: reportsData.averageDaily,
+      bestCategory: reportsData.bestCategory
     },
     lowStockItems: inventory.filter((item) => item.status !== "In Stock").slice(0, 4),
     pendingEloadRequests,
     pendingGcashRequests,
     bestSellingItem: bestSelling.items[0] || null,
-    dailySeries
+    weeklySeries: reportsData.weeklySeries,
+    monthlySeries: reportsData.monthlySeries,
+    categoryBreakdown: reportsData.categoryBreakdown
   };
 }
 
@@ -1204,9 +1625,9 @@ export function getDashboardChartData(range = "daily") {
   const productValues = Array(numberOfDays).fill(0);
 
   const productLogs = db.prepare(`
-    SELECT Sale_Date AS saleDate, Total_Amount AS totalAmount
-    FROM Products_Log
-    WHERE Sale_Date >= ? AND Sale_Date < ?
+    SELECT sale_date AS saleDate, total_amount AS totalAmount
+    FROM report_product_logs
+    WHERE sale_date >= ? AND sale_date < ?
   `).all(toIsoDate(monthStart), toIsoDate(nextMonthStart));
 
   const completedDigitalRequests = db.prepare(`
@@ -1306,26 +1727,26 @@ export function getLogsData(dateKey = toIsoDate(getTodayDate())) {
   const selectedDate = String(dateKey || toIsoDate(getTodayDate()));
   const productLogs = db.prepare(`
     SELECT
-      Products_Log.Log_ID AS logId,
-      Products_Log.Transaction_Code AS transactionCode,
-      Products_Log.Sale_Date AS date,
-      Products_Log.Total_Amount AS totalAmount,
-      Products_Log.Emp_Mng AS employee,
-      Products_Log.Time_Stamp AS timeStamp
-    FROM Products_Log
-    WHERE Products_Log.Sale_Date = ?
-    ORDER BY Products_Log.Time_Stamp DESC, Products_Log.Log_ID DESC
+      log_id AS logId,
+      transaction_code AS transactionCode,
+      sale_date AS date,
+      total_amount AS totalAmount,
+      employee_name AS employee,
+      time_stamp AS timeStamp
+    FROM report_product_logs
+    WHERE sale_date = ?
+    ORDER BY time_stamp DESC, log_id DESC
   `).all(selectedDate).map((row) => {
     const items = db.prepare(`
       SELECT
-        Log_Item_ID AS logItemId,
-        Product_ID AS productId,
-        Item_Name AS itemName,
-        Quantity AS quantity,
-        Selling_Price AS sellingPrice
-      FROM Selling_Log_Items
-      WHERE Log_ID = ?
-      ORDER BY Log_Item_ID ASC
+        id AS logItemId,
+        inventory_item_id AS productId,
+        item_name AS itemName,
+        quantity AS quantity,
+        price AS sellingPrice
+      FROM sale_items
+      WHERE sale_id = ?
+      ORDER BY id ASC
     `).all(row.logId).map((item) => ({
       ...item,
       quantity: Number(item.quantity || 0),
@@ -1342,23 +1763,59 @@ export function getLogsData(dateKey = toIsoDate(getTodayDate())) {
 
   const digitalRequestLogs = db.prepare(`
     SELECT
-      request_code AS requestCode,
-      service_type AS serviceType,
-      status,
-      mobile_number AS number,
-      amount,
-      request_kind AS requestKind,
-      network,
-      load_type AS loadType,
-      load_value AS loadValue,
-      reference_no AS referenceNo,
-      requested_by_name AS requestedBy,
-      requested_at AS requestedAt,
-      completed_by_name AS completedBy,
-      completed_at AS completedAt
-    FROM digital_service_requests
-    WHERE date(datetime(requested_at, '+8 hours')) = ?
-    ORDER BY requested_at DESC, id DESC
+      logs.transaction_code AS requestCode,
+      logs.service_type AS serviceType,
+      logs.status,
+      logs.number,
+      logs.amount,
+      logs.request_kind AS requestKind,
+      logs.network,
+      logs.load_type AS loadType,
+      logs.load_value AS loadValue,
+      logs.reference_no AS referenceNo,
+      logs.requested_by_name AS requestedBy,
+      logs.requested_at AS requestedAt,
+      logs.completed_by_name AS completedBy,
+      logs.completed_at AS completedAt
+    FROM (
+      SELECT
+        'eload' AS service_type,
+        transaction_code,
+        number,
+        amount,
+        '' AS request_kind,
+        network,
+        '' AS load_type,
+        item_name AS load_value,
+        '' AS reference_no,
+        requested_by_name,
+        requested_at,
+        completed_by_name,
+        completed_at,
+        status,
+        time_stamp
+      FROM report_eload_logs
+      UNION ALL
+      SELECT
+        'gcash' AS service_type,
+        transaction_code,
+        number,
+        amount,
+        request_kind,
+        '' AS network,
+        '' AS load_type,
+        '' AS load_value,
+        reference_no,
+        requested_by_name,
+        requested_at,
+        completed_by_name,
+        completed_at,
+        status,
+        time_stamp
+      FROM report_gcash_logs
+    ) logs
+    WHERE date(datetime(logs.requested_at, '+8 hours')) = ?
+    ORDER BY logs.requested_at DESC, logs.transaction_code DESC
   `).all(selectedDate).map((row) => ({
     ...row,
     amount: Number(row.amount || 0)
@@ -1443,16 +1900,28 @@ export function getDatabasePath() {
 
 export function resetAllData() {
   db.exec(`
+    BEGIN;
+    DELETE FROM sale_digital_items;
     DELETE FROM sale_items;
     DELETE FROM sales;
+    DELETE FROM Selling_Log_Items;
+    DELETE FROM Products_Log;
+    DELETE FROM GCash_Log;
+    DELETE FROM ELoad_Log;
+    DELETE FROM digital_service_requests;
     DELETE FROM inventory_items;
-    DELETE FROM suppliers;
-    DELETE FROM categories;
-    DELETE FROM store_settings;
-    DELETE FROM users;
-    DELETE FROM sqlite_sequence;
+    DELETE FROM sqlite_sequence
+      WHERE name IN (
+        'sale_digital_items',
+        'sale_items',
+        'sales',
+        'Selling_Log_Items',
+        'Products_Log',
+        'GCash_Log',
+        'ELoad_Log',
+        'digital_service_requests',
+        'inventory_items'
+      );
+    COMMIT;
   `);
-  seedDefaults();
-  seedSuppliersFromInventory();
-  seedCategoriesFromInventory();
 }

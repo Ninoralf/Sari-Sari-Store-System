@@ -5,36 +5,88 @@
     <%- include("partials/topbar") %>
     <section class="p-3 p-lg-4">
       <%- include("partials/flash") %>
-      <div class="row g-4 mb-4 dashboard-metrics-grid">
-        <div class="col-md-6 col-xl-4"><a class="metric-card metric-card-link dashboard-metric-card p-4 h-100 d-block text-reset text-decoration-none" href="/inventory"><div class="dashboard-metric-body d-flex justify-content-between"><div class="dashboard-metric-copy"><div class="mini-note dashboard-metric-label">Total Products</div><div class="dashboard-metric-value display-6 fw-bold" id="dashboardMetricTotalProducts"><%= metrics.totalProducts %></div><div class="mini-note dashboard-metric-note">Current inventory records</div></div><div class="stat-icon blue"><i class="bi bi-box-seam fs-4"></i></div></div></a></div>
-        <div class="col-md-6 col-xl-4"><a class="metric-card metric-card-link dashboard-metric-card p-4 h-100 d-block text-reset text-decoration-none" href="/inventory?status=Low%20Stock"><div class="dashboard-metric-body d-flex justify-content-between"><div class="dashboard-metric-copy"><div class="mini-note dashboard-metric-label">Low Stock Items</div><div class="dashboard-metric-value display-6 fw-bold text-warning" id="dashboardMetricLowStock"><%= metrics.lowStockItems %></div><div class="mini-note dashboard-metric-note">Need attention soon</div></div><div class="stat-icon yellow"><i class="bi bi-exclamation-triangle fs-4"></i></div></div></a></div>
-        <div class="col-md-6 col-xl-4"><a class="metric-card metric-card-link dashboard-metric-card p-4 h-100 d-block text-reset text-decoration-none" href="/inventory?status=Out%20of%20Stock"><div class="dashboard-metric-body d-flex justify-content-between"><div class="dashboard-metric-copy"><div class="mini-note dashboard-metric-label">Out of Stock</div><div class="dashboard-metric-value display-6 fw-bold text-danger" id="dashboardMetricOutOfStock"><%= metrics.outOfStockItems %></div><div class="mini-note dashboard-metric-note">Reorder immediately</div></div><div class="stat-icon red"><i class="bi bi-x-octagon fs-4"></i></div></div></a></div>
-        <div class="col-md-6 col-xl-4"><div class="metric-card dashboard-metric-card p-4 h-100"><div class="dashboard-metric-body d-flex justify-content-between"><div class="dashboard-metric-copy"><div class="mini-note dashboard-metric-label">Daily Sales</div><div class="dashboard-metric-value h2 fw-bold" id="dashboardMetricDailySales"><%= formatCurrency(metrics.dailySales) %></div><div class="mini-note dashboard-metric-note">As of <%= currentDateLabel %></div></div><div class="stat-icon green"><i class="bi bi-cash-stack fs-4"></i></div></div></div></div>
-        <div class="col-md-6 col-xl-4"><div class="metric-card dashboard-metric-card p-4 h-100"><div class="dashboard-metric-body d-flex justify-content-between"><div class="dashboard-metric-copy"><div class="mini-note dashboard-metric-label">Monthly Sales</div><div class="dashboard-metric-value h2 fw-bold" id="dashboardMetricMonthlySales"><%= formatCurrency(metrics.monthlySales) %></div><div class="mini-note dashboard-metric-note">Rolling 30-day revenue</div><div class="dashboard-metric-breakdown mt-2 small"><div class="fw-semibold text-warning" id="dashboardMetricMonthlyProductsTotal"></div><div class="fw-semibold text-success" id="dashboardMetricMonthlyLoadTotal"></div><div class="fw-semibold text-primary" id="dashboardMetricMonthlyGcashTotal"></div></div></div><div class="stat-icon cyan"><i class="bi bi-graph-up-arrow fs-4"></i></div></div></div></div>
+      <div class="row g-2 g-lg-3 mb-4 dashboard-metrics-grid">
+        <div class="col-3 col-md-6 col-xl-4"><a class="content-card dashboard-metric-card p-3 border-start border-4 border-primary h-100 d-block text-reset text-decoration-none" href="/inventory"><div class="dashboard-metric-body"><div class="dashboard-metric-icon d-lg-none"><i class="bi bi-box-seam"></i></div><div class="mini-note text-uppercase fw-bold dashboard-metric-label d-none d-lg-block">Total Products</div><div class="h2 mb-0 fw-bold dashboard-metric-value" id="dashboardMetricTotalProducts"><%= metrics.totalProducts %></div><div class="mini-note text-muted dashboard-metric-note d-none d-lg-block">Current inventory records</div></div></a></div>
+        <div class="col-3 col-md-6 col-xl-4"><a class="content-card dashboard-metric-card p-3 border-start border-4 border-warning h-100 d-block text-reset text-decoration-none" href="/inventory?status=Low%20Stock"><div class="dashboard-metric-body"><div class="dashboard-metric-icon d-lg-none"><i class="bi bi-exclamation-triangle"></i></div><div class="mini-note text-uppercase fw-bold dashboard-metric-label d-none d-lg-block">Low Stock Items</div><div class="h2 mb-0 fw-bold text-warning dashboard-metric-value" id="dashboardMetricLowStock"><%= metrics.lowStockItems %></div><div class="mini-note text-muted dashboard-metric-note d-none d-lg-block">Need attention soon</div></div></a></div>
+        <div class="col-3 col-md-6 col-xl-4"><a class="content-card dashboard-metric-card p-3 border-start border-4 border-danger h-100 d-block text-reset text-decoration-none" href="/inventory?status=Out%20of%20Stock"><div class="dashboard-metric-body"><div class="dashboard-metric-icon d-lg-none"><i class="bi bi-x-circle"></i></div><div class="mini-note text-uppercase fw-bold dashboard-metric-label d-none d-lg-block">Out of Stock</div><div class="h2 mb-0 fw-bold text-danger dashboard-metric-value" id="dashboardMetricOutOfStock"><%= metrics.outOfStockItems %></div><div class="mini-note text-muted dashboard-metric-note d-none d-lg-block">Reorder immediately</div></div></a></div>
+        <div class="col-3 col-md-6 col-xl-4"><div class="content-card dashboard-metric-card p-3 border-start border-4 border-success h-100"><div class="dashboard-metric-body"><div class="dashboard-metric-icon d-lg-none"><i class="bi bi-graph-up"></i></div><div class="mini-note text-uppercase fw-bold dashboard-metric-label d-none d-lg-block">Daily Sales</div><div class="h2 mb-0 fw-bold text-success dashboard-metric-value" id="dashboardMetricDailySales"><%= formatCurrency(metrics.dailySales) %></div><div class="mini-note text-muted dashboard-metric-note d-none d-lg-block">As of <%= currentDateLabel %></div></div></div></div>
+        <div class="col-3 col-md-6 col-xl-4"><div class="content-card dashboard-metric-card p-3 border-start border-4 border-info h-100"><div class="dashboard-metric-body"><div class="dashboard-metric-icon d-lg-none"><i class="bi bi-cash-stack"></i></div><div class="mini-note text-uppercase fw-bold dashboard-metric-label d-none d-lg-block">Total Revenue</div><div class="h2 mb-0 fw-bold dashboard-metric-value" id="dashboardMetricTotalRevenue"><%= formatCurrency(metrics.totalRevenue) %></div><div class="mini-note text-muted dashboard-metric-note">Accumulated sales history</div></div></div></div>
+        <div class="col-3 col-md-6 col-xl-4"><div class="content-card dashboard-metric-card p-3 border-start border-4 border-primary h-100"><div class="dashboard-metric-body"><div class="dashboard-metric-icon d-lg-none"><i class="bi bi-cart-check"></i></div><div class="mini-note text-uppercase fw-bold dashboard-metric-label d-none d-lg-block">Monthly Product Sales</div><div class="h2 mb-0 fw-bold text-warning dashboard-metric-value" id="dashboardMetricMonthlyProducts"><%= formatCurrency(metrics.monthlyProducts) %></div><div class="mini-note text-muted dashboard-metric-note d-none d-lg-block">Rolling 30-day inventory sales</div></div></div></div>
+        <div class="col-3 col-md-6 col-xl-4"><div class="content-card dashboard-metric-card p-3 border-start border-4 border-success h-100"><div class="dashboard-metric-body"><div class="dashboard-metric-icon d-lg-none"><i class="bi bi-phone"></i></div><div class="mini-note text-uppercase fw-bold dashboard-metric-label d-none d-lg-block">Monthly eLoad Sales</div><div class="h2 mb-0 fw-bold text-success dashboard-metric-value" id="dashboardMetricMonthlyLoad"><%= formatCurrency(metrics.monthlyLoad) %></div><div class="mini-note text-muted dashboard-metric-note d-none d-lg-block">Rolling 30-day load volume</div></div></div></div>
+        <div class="col-3 col-md-6 col-xl-4"><div class="content-card dashboard-metric-card p-3 border-start border-4 border-primary h-100"><div class="dashboard-metric-body"><div class="dashboard-metric-icon d-lg-none"><i class="bi bi-wallet2"></i></div><div class="mini-note text-uppercase fw-bold dashboard-metric-label d-none d-lg-block">Monthly GCash Sales</div><div class="h2 mb-0 fw-bold text-primary dashboard-metric-value" id="dashboardMetricMonthlyGcash"><%= formatCurrency(metrics.monthlyGcash) %></div><div class="mini-note text-muted dashboard-metric-note d-none d-lg-block">Rolling 30-day GCash volume</div></div></div></div>
       </div>
+
       <div class="row g-4 mb-4">
         <div class="col-12">
           <div class="content-card p-4">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
               <div>
                 <div class="section-title" id="dashboardChartTitle"><%= chartTitle %></div>
-                <div class="mini-note">Daily trend for the current month, separated into GCash, Load, and Products.</div>
               </div>
             </div>
             <div class="h-100">
-              <div class="mini-note mb-2">Trend View</div>
               <canvas id="salesTrendChart" height="110"></canvas>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- ANALYTICS SECTION -->
       <div class="row g-4 mb-4">
+        <div class="col-12">
+          <hr class="my-4 opacity-25">
+          <div class="section-title h4 mb-4"><i class="bi bi-graph-up-arrow me-2"></i>Analytics & Long-term Insights</div>
+        </div>
+        <div class="col-xl-6">
+          <div class="content-card p-4 h-100">
+            <div class="section-title mb-3">Weekly Sales Performance</div>
+            <canvas id="weeklyChart" height="180"></canvas>
+          </div>
+        </div>
+        <div class="col-xl-6">
+          <div class="content-card p-4 h-100">
+            <div class="section-title mb-3">Monthly Sales Trend</div>
+            <canvas id="monthlyChart" height="180"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-4 mb-4">
+        <div class="col-xl-6">
+          <div class="content-card p-4 h-100">
+            <div class="section-title mb-3">Sales by Category</div>
+            <canvas id="categoryPie" height="220"></canvas>
+          </div>
+        </div>
+        <div class="col-xl-6">
+          <div class="content-card p-4 h-100">
+            <div class="section-title mb-3">Category Revenue Breakdown</div>
+            <div class="vstack gap-4" id="categoryBreakdownList">
+              <% const totalBreakdown = categoryBreakdown.reduce((sum, item) => sum + item.revenue, 0); %>
+              <% categoryBreakdown.forEach((item, index) => { %>
+                <% const percentage = totalBreakdown ? ((item.revenue / totalBreakdown) * 100).toFixed(1) : 0; %>
+                <div>
+                  <div class="d-flex justify-content-between"><div class="fw-semibold"><%= item.category %></div><div><%= formatCurrency(item.revenue) %></div></div>
+                  <div class="progress progress-soft mt-2"><div class="progress-bar" role="progressbar" style="width: <%= percentage %>%; background-color: <%= ['#10b981', '#0d9488', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6'][index % 6] %>"></div></div>
+                  <div class="mini-note mt-1"><%= percentage %>% of total sales</div>
+                </div>
+              <% }) %>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-4 mb-4">
+        <div class="col-12">
+          <hr class="my-4 opacity-25">
+          <div class="section-title h4 mb-4"><i class="bi bi-activity me-2"></i>Real-time Operations</div>
+        </div>
         <div class="col-xl-6">
           <div class="content-card p-4 h-100">
             <div class="section-title mb-3"><i class="bi bi-trophy text-warning me-2"></i>Best Selling Item This Month</div>
             <% if (bestSellingItem) { %>
-              <div class="top-item-card rounded-4 p-4 d-flex gap-3 align-items-center" id="dashboardBestSellingCard">
-                <div class="icon-chip"><i class="bi bi-award fs-4"></i></div>
+              <div class="bg-light rounded-3 p-3 d-flex gap-3 align-items-center border-start border-4 border-warning" id="dashboardBestSellingCard">
+                <div class="btn btn-sm btn-light rounded-circle shadow-sm"><i class="bi bi-award text-warning"></i></div>
                 <div><div class="fw-bold fs-5"><%= bestSellingItem.name %></div><div class="mini-note"><%= bestSellingItem.quantity_sold %> units sold</div><div class="text-success fw-semibold"><%= formatCurrency(bestSellingItem.revenue) %> revenue</div></div>
               </div>
             <% } %>
@@ -45,7 +97,7 @@
             <div class="section-title mb-3 text-warning"><i class="bi bi-exclamation-triangle me-2"></i>Low Stock Alert</div>
             <div class="vstack gap-3" id="dashboardLowStockList">
               <% lowStockItems.forEach((item) => { %>
-                <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-4 p-3 text-reset text-decoration-none" href="/inventory?status=<%= encodeURIComponent(item.status) %>&search=<%= encodeURIComponent(item.name) %>" style="background: rgba(245, 158, 11, 0.08);">
+                <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-3 p-3 bg-light text-reset text-decoration-none border-start border-4 border-warning" href="/inventory?status=<%= encodeURIComponent(item.status) %>&search=<%= encodeURIComponent(item.name) %>">
                   <div><div class="fw-semibold"><%= item.name %></div><div class="mini-note"><%= item.category %></div></div>
                   <div class="text-end"><div class="fw-bold <%= item.status === 'Out of Stock' ? 'text-danger' : 'text-warning' %>"><%= item.status %></div><div class="mini-note">Manual stock check</div></div>
                 </a>
@@ -59,14 +111,14 @@
           <div class="content-card p-4 h-100">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
               <div class="section-title text-success mb-0"><i class="bi bi-phone me-2"></i>Pending Eload Requests</div>
-              <a class="btn btn-sm btn-outline-success" href="/eload">Open Eload Queue</a>
+              <a class="btn btn-outline-success btn-sm rounded-pill px-3" href="/eload">Open Eload Queue</a>
             </div>
             <div class="vstack gap-3" id="dashboardPendingEloadList">
               <% if (!pendingEloadRequests.length) { %>
                 <div class="mini-note text-center py-4">No pending eload requests right now.</div>
               <% } else { %>
                 <% pendingEloadRequests.forEach((request) => { %>
-                  <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-4 p-3 text-reset text-decoration-none" href="/eload" style="background: rgba(34, 197, 94, 0.08);">
+                  <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-3 p-3 bg-light text-reset text-decoration-none border-start border-4 border-success" href="/eload">
                     <div>
                       <div class="fw-semibold"><%= request.request_code %> | <%= request.mobile_number %></div>
                       <div class="mini-note"><%= request.network || "No network" %> | <%= request.load_value || request.load_type || "Pending load selection" %></div>
@@ -85,14 +137,14 @@
           <div class="content-card p-4 h-100">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
               <div class="section-title text-primary mb-0"><i class="bi bi-wallet2 me-2"></i>Pending GCash Requests</div>
-              <a class="btn btn-sm btn-outline-primary" href="/eload">Open GCash Queue</a>
+              <a class="btn btn-outline-primary btn-sm rounded-pill px-3" href="/eload">Open GCash Queue</a>
             </div>
             <div class="vstack gap-3" id="dashboardPendingGcashList">
               <% if (!pendingGcashRequests.length) { %>
                 <div class="mini-note text-center py-4">No pending GCash requests right now.</div>
               <% } else { %>
                 <% pendingGcashRequests.forEach((request) => { %>
-                  <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-4 p-3 text-reset text-decoration-none" href="/eload" style="background: rgba(59, 130, 246, 0.08);">
+                  <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-3 p-3 bg-light text-reset text-decoration-none border-start border-4 border-primary" href="/eload">
                     <div>
                       <div class="fw-semibold"><%= request.request_code %> | <%= request.mobile_number %></div>
                       <div class="mini-note"><%= request.request_kind || "GCash request" %> | <%= request.reference_no || "Reference pending" %></div>
@@ -109,6 +161,7 @@
         </div>
       </div>
     </section>
+    <%- include("partials/footer") %>
   </main>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -119,20 +172,24 @@
   const dashboardMetricLowStock = document.getElementById("dashboardMetricLowStock");
   const dashboardMetricOutOfStock = document.getElementById("dashboardMetricOutOfStock");
   const dashboardMetricDailySales = document.getElementById("dashboardMetricDailySales");
-  const dashboardMetricMonthlySales = document.getElementById("dashboardMetricMonthlySales");
-  const dashboardMetricMonthlyProductsTotal = document.getElementById("dashboardMetricMonthlyProductsTotal");
-  const dashboardMetricMonthlyLoadTotal = document.getElementById("dashboardMetricMonthlyLoadTotal");
-  const dashboardMetricMonthlyGcashTotal = document.getElementById("dashboardMetricMonthlyGcashTotal");
+  const dashboardMetricTotalRevenue = document.getElementById("dashboardMetricTotalRevenue");
+  const dashboardMetricMonthlyProducts = document.getElementById("dashboardMetricMonthlyProducts");
+  const dashboardMetricMonthlyLoad = document.getElementById("dashboardMetricMonthlyLoad");
+  const dashboardMetricMonthlyGcash = document.getElementById("dashboardMetricMonthlyGcash");
   const dashboardBestSellingCard = document.getElementById("dashboardBestSellingCard");
   const dashboardLowStockList = document.getElementById("dashboardLowStockList");
   const dashboardPendingEloadList = document.getElementById("dashboardPendingEloadList");
   const dashboardPendingGcashList = document.getElementById("dashboardPendingGcashList");
+  const categoryBreakdownList = document.getElementById("categoryBreakdownList");
+  
   const rootStyles = getComputedStyle(document.body);
   const lineColor = rootStyles.getPropertyValue("--line-soft").trim();
   const textColor = rootStyles.getPropertyValue("--text-muted").trim();
   const gcashBlue = rootStyles.getPropertyValue("--brand-blue").trim() || "#3b82f6";
   const loadLightGreen = "#86efac";
   const productsOrange = "#f59e0b";
+  const chartColors = ["#10b981", "#0d9488", "#06b6d4", "#3b82f6", "#6366f1", "#8b5cf6"];
+  
   let dashboardOverviewRefreshInFlight = false;
   let dashboardChartRefreshInFlight = false;
 
@@ -149,17 +206,94 @@
     return new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(value || 0);
   }
 
-  function sumDatasetValues(dataset) {
-    return (dataset?.values || dataset?.data || []).reduce((sum, value) => sum + Number(value || 0), 0);
+  function clearChildren(element) {
+    if (!element) return;
+    while (element.firstChild) element.removeChild(element.firstChild);
   }
 
-  function renderMonthlySalesBreakdown(datasets) {
-    const gcashTotal = sumDatasetValues(datasets[0]);
-    const loadTotal = sumDatasetValues(datasets[1]);
-    const productsTotal = sumDatasetValues(datasets[2]);
-    dashboardMetricMonthlyProductsTotal.textContent = `Products: ${formatPeso(productsTotal)}`;
-    dashboardMetricMonthlyLoadTotal.textContent = `eLoad: ${formatPeso(loadTotal)}`;
-    dashboardMetricMonthlyGcashTotal.textContent = `GCash: ${formatPeso(gcashTotal)}`;
+  function appendTextElement(parent, tagName, className, text) {
+    const element = document.createElement(tagName);
+    if (className) element.className = className;
+    element.textContent = text;
+    parent.appendChild(element);
+    return element;
+  }
+
+  function renderBestSellingCard(item) {
+    if (!item || !dashboardBestSellingCard) return;
+    clearChildren(dashboardBestSellingCard);
+
+    const iconWrap = document.createElement("div");
+    iconWrap.className = "btn btn-sm btn-light rounded-circle shadow-sm";
+    const icon = document.createElement("i");
+    icon.className = "bi bi-award text-warning";
+    iconWrap.appendChild(icon);
+
+    const content = document.createElement("div");
+    appendTextElement(content, "div", "fw-bold fs-5", item.name || "");
+    appendTextElement(content, "div", "mini-note", `${Number(item.quantity_sold || 0)} units sold`);
+    appendTextElement(content, "div", "text-success fw-semibold", `${formatPeso(item.revenue)} revenue`);
+
+    dashboardBestSellingCard.appendChild(iconWrap);
+    dashboardBestSellingCard.appendChild(content);
+  }
+
+  function renderLowStockItems(items) {
+    if (!dashboardLowStockList) return;
+    clearChildren(dashboardLowStockList);
+
+    items.forEach((item) => {
+      const link = document.createElement("a");
+      link.className = "dashboard-alert-link d-flex justify-content-between align-items-center rounded-3 p-3 bg-light text-reset text-decoration-none border-start border-4 border-warning";
+      link.href = `/inventory?status=${encodeURIComponent(item.status)}&search=${encodeURIComponent(item.name)}`;
+
+      const textWrap = document.createElement("div");
+      appendTextElement(textWrap, "div", "fw-semibold", item.name || "");
+      appendTextElement(textWrap, "div", "mini-note", item.category || "");
+
+      const statusWrap = document.createElement("div");
+      statusWrap.className = "text-end";
+      appendTextElement(statusWrap, "div", `fw-bold ${item.status === "Out of Stock" ? "text-danger" : "text-warning"}`, item.status || "");
+      appendTextElement(statusWrap, "div", "mini-note", "Manual stock check");
+
+      link.appendChild(textWrap);
+      link.appendChild(statusWrap);
+      dashboardLowStockList.appendChild(link);
+    });
+  }
+
+  function renderCategoryBreakdown(items) {
+    if (!categoryBreakdownList) return;
+    clearChildren(categoryBreakdownList);
+
+    const totalBreakdown = items.reduce((sum, item) => sum + Number(item.revenue || 0), 0);
+    items.forEach((item, index) => {
+      const percentage = totalBreakdown ? ((Number(item.revenue || 0) / totalBreakdown) * 100).toFixed(1) : "0.0";
+      const wrapper = document.createElement("div");
+
+      const header = document.createElement("div");
+      header.className = "d-flex justify-content-between";
+      appendTextElement(header, "div", "fw-semibold", item.category || "");
+      appendTextElement(header, "div", "", formatPeso(item.revenue));
+
+      const progress = document.createElement("div");
+      progress.className = "progress progress-soft mt-2";
+      const progressBar = document.createElement("div");
+      progressBar.className = "progress-bar";
+      progressBar.setAttribute("role", "progressbar");
+      progressBar.style.width = `${percentage}%`;
+      progressBar.style.backgroundColor = chartColors[index % 6];
+      progress.appendChild(progressBar);
+
+      const note = document.createElement("div");
+      note.className = "mini-note mt-1";
+      note.textContent = `${percentage}% of total sales`;
+
+      wrapper.appendChild(header);
+      wrapper.appendChild(progress);
+      wrapper.appendChild(note);
+      categoryBreakdownList.appendChild(wrapper);
+    });
   }
 
   const sharedOptions = {
@@ -190,6 +324,33 @@
     options: sharedOptions
   });
 
+  const weeklyChart = new Chart(document.getElementById("weeklyChart"), { 
+    type: "bar", 
+    data: { 
+      labels: <%- JSON.stringify(weeklySeries.map(x => x.label)) %>, 
+      datasets: [{ data: <%- JSON.stringify(weeklySeries.map(x => x.total)) %>, backgroundColor: "#10b981", borderRadius: 10 }] 
+    }, 
+    options: { plugins: { legend: { display: false } }, ...sharedOptions } 
+  });
+
+  const monthlyChart = new Chart(document.getElementById("monthlyChart"), { 
+    type: "line", 
+    data: { 
+      labels: <%- JSON.stringify(monthlySeries.map(x => x.label)) %>, 
+      datasets: [{ data: <%- JSON.stringify(monthlySeries.map(x => x.total)) %>, borderColor: "#0d9488", pointBackgroundColor: "#0d9488", tension: 0.35 }] 
+    }, 
+    options: { plugins: { legend: { display: false } }, ...sharedOptions } 
+  });
+
+  const categoryPie = new Chart(document.getElementById("categoryPie"), { 
+    type: "pie", 
+    data: { 
+      labels: <%- JSON.stringify(categoryBreakdown.map(x => x.category)) %>, 
+      datasets: [{ data: <%- JSON.stringify(categoryBreakdown.map(x => x.revenue)) %>, backgroundColor: chartColors }] 
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: textColor } } } }
+  });
+
   async function loadDashboardOverview() {
     if (dashboardOverviewRefreshInFlight || document.visibilityState !== "visible") return;
     dashboardOverviewRefreshInFlight = true;
@@ -204,28 +365,18 @@
       dashboardMetricLowStock.textContent = String(payload.metrics.lowStockItems);
       dashboardMetricOutOfStock.textContent = String(payload.metrics.outOfStockItems);
       dashboardMetricDailySales.textContent = formatPeso(payload.metrics.dailySales);
-      dashboardMetricMonthlySales.textContent = formatPeso(payload.metrics.monthlySales);
+      dashboardMetricTotalRevenue.textContent = formatPeso(payload.metrics.totalRevenue);
+      dashboardMetricMonthlyProducts.textContent = formatPeso(payload.metrics.monthlyProducts);
+      dashboardMetricMonthlyLoad.textContent = formatPeso(payload.metrics.monthlyLoad);
+      dashboardMetricMonthlyGcash.textContent = formatPeso(payload.metrics.monthlyGcash);
 
-      if (payload.bestSellingItem && dashboardBestSellingCard) {
-        dashboardBestSellingCard.innerHTML = `
-          <div class="icon-chip"><i class="bi bi-award fs-4"></i></div>
-          <div><div class="fw-bold fs-5">${payload.bestSellingItem.name}</div><div class="mini-note">${payload.bestSellingItem.quantity_sold} units sold</div><div class="text-success fw-semibold">${new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(payload.bestSellingItem.revenue)} revenue</div></div>
-        `;
-      }
-
-      if (dashboardLowStockList) {
-        dashboardLowStockList.innerHTML = payload.lowStockItems.map((item) => `
-          <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-4 p-3 text-reset text-decoration-none" href="/inventory?status=${encodeURIComponent(item.status)}&search=${encodeURIComponent(item.name)}" style="background: rgba(245, 158, 11, 0.08);">
-            <div><div class="fw-semibold">${item.name}</div><div class="mini-note">${item.category}</div></div>
-            <div class="text-end"><div class="fw-bold ${item.status === "Out of Stock" ? "text-danger" : "text-warning"}">${item.status}</div><div class="mini-note">Manual stock check</div></div>
-          </a>
-        `).join("");
-      }
+      renderBestSellingCard(payload.bestSellingItem);
+      renderLowStockItems(Array.isArray(payload.lowStockItems) ? payload.lowStockItems : []);
 
       if (dashboardPendingEloadList) {
         dashboardPendingEloadList.innerHTML = payload.pendingEloadRequests.length
           ? payload.pendingEloadRequests.map((request) => `
-            <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-4 p-3 text-reset text-decoration-none" href="/eload" style="background: rgba(34, 197, 94, 0.08);">
+            <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-3 p-3 bg-light text-reset text-decoration-none border-start border-4 border-success" href="/eload">
               <div>
                 <div class="fw-semibold">${escapeHtml(request.request_code)} | ${escapeHtml(request.mobile_number)}</div>
                 <div class="mini-note">${escapeHtml(request.network || "No network")} | ${escapeHtml(request.load_value || request.load_type || "Pending load selection")}</div>
@@ -242,7 +393,7 @@
       if (dashboardPendingGcashList) {
         dashboardPendingGcashList.innerHTML = payload.pendingGcashRequests.length
           ? payload.pendingGcashRequests.map((request) => `
-            <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-4 p-3 text-reset text-decoration-none" href="/eload" style="background: rgba(59, 130, 246, 0.08);">
+            <a class="dashboard-alert-link d-flex justify-content-between align-items-center rounded-3 p-3 bg-light text-reset text-decoration-none border-start border-4 border-primary" href="/eload">
               <div>
                 <div class="fw-semibold">${escapeHtml(request.request_code)} | ${escapeHtml(request.mobile_number)}</div>
                 <div class="mini-note">${escapeHtml(request.request_kind || "GCash request")} | ${escapeHtml(request.reference_no || "Reference pending")}</div>
@@ -255,6 +406,22 @@
           `).join("")
           : `<div class="mini-note text-center py-4">No pending GCash requests right now.</div>`;
       }
+      
+      // Update Analytics Charts
+      weeklyChart.data.labels = payload.weeklySeries.map(x => x.label);
+      weeklyChart.data.datasets[0].data = payload.weeklySeries.map(x => x.total);
+      weeklyChart.update();
+      
+      monthlyChart.data.labels = payload.monthlySeries.map(x => x.label);
+      monthlyChart.data.datasets[0].data = payload.monthlySeries.map(x => x.total);
+      monthlyChart.update();
+      
+      categoryPie.data.labels = payload.categoryBreakdown.map(x => x.category);
+      categoryPie.data.datasets[0].data = payload.categoryBreakdown.map(x => x.revenue);
+      categoryPie.update();
+
+      renderCategoryBreakdown(Array.isArray(payload.categoryBreakdown) ? payload.categoryBreakdown : []);
+
     } catch (error) {
       console.error(error);
     } finally {
@@ -278,7 +445,6 @@
       salesTrendChart.data.datasets[1].data = chart.datasets[1].values;
       salesTrendChart.data.datasets[2].data = chart.datasets[2].values;
       salesTrendChart.update();
-      renderMonthlySalesBreakdown(chart.datasets);
     } catch (error) {
       console.error(error);
     } finally {
@@ -286,11 +452,6 @@
     }
   }
 
-  renderMonthlySalesBreakdown([
-    { values: <%- JSON.stringify(chartDatasets[0].values) %> },
-    { values: <%- JSON.stringify(chartDatasets[1].values) %> },
-    { values: <%- JSON.stringify(chartDatasets[2].values) %> }
-  ]);
   loadDashboardOverview();
   refreshDashboardChart();
   window.setInterval(loadDashboardOverview, 10000);

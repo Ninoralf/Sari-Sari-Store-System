@@ -2,17 +2,23 @@ import express from "express";
 import session from "express-session";
 import crypto from "node:crypto";
 import path from "node:path";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   addInventoryItem,
+  clearFailedLoginAttempts,
   completeDigitalServiceRequest,
   createCategory,
+  createEloadNetwork,
+  createEloadPromo,
   createUserAccount,
   createSupplier,
   createDigitalServiceRequest,
   createSale,
   deleteInventoryItem,
   deleteCategory,
+  deleteEloadNetwork,
+  deleteEloadPromo,
   failDigitalServiceRequest,
   exportInventoryCsv,
   exportSalesCsv,
@@ -20,25 +26,33 @@ import {
   getDashboardData,
   getDashboardChartData,
   getDatabasePath,
+  getInventoryItemByBarcode,
   getLogsData,
   getReportsData,
   getSalesMetrics,
   getStoreSettings,
+  getEloadPromoCatalog,
+  getLoginProtectionState,
+  getUserAuthById,
+  getUserAuthByUsername,
   listDigitalServiceRequests,
   getUserById,
-  getUserByUsername,
   initializeDatabase,
   listCategories,
+  listEloadNetworks,
   listUsers,
   listInventory,
   listSuppliers,
   listSales,
   resetAllData,
+  recordFailedLoginAttempt,
   deleteSupplier,
   updateUserAccount,
   updateUserPin,
   updateCategory,
+  updateEloadPromo,
   updateInventoryItem,
+  updateInventoryItemStatus,
   updateNotifications,
   updatePassword,
   updateSupplier,
@@ -48,6 +62,7 @@ import {
   verifyPassword,
   getInventorySummary
 } from "./db.js";
+import { SQLiteSessionStore } from "./sqlite-session-store.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -55,8 +70,39 @@ const app = express();
 const port = process.env.PORT || 3000;
 const sessionMaxAgeMs = 30 * 60 * 1000;
 const sessionCookieName = "store.sid";
+const loginRateLimitMessage = "Too many failed sign-in attempts. Please wait a few minutes and try again.";
 
-initializeDatabase();
+const versionData = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "public", "version.json"), "utf8"));
+const systemVersion = versionData.version;
+const envFilePath = path.join(__dirname, "..", ".env");
+
+function readEnvValue(name) {
+  if (!fs.existsSync(envFilePath)) return "";
+  const lines = fs.readFileSync(envFilePath, "utf8").split(/\r?\n/);
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const separatorIndex = trimmed.indexOf("=");
+    if (separatorIndex < 0) continue;
+    const key = trimmed.slice(0, separatorIndex).trim();
+    if (key !== name) continue;
+    let value = trimmed.slice(separatorIndex + 1).trim();
+    if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    return value;
+  }
+
+  return "";
+}
+
+const sessionSecret = String(process.env.SESSION_SECRET || readEnvValue("SESSION_SECRET") || "").trim();
+if (process.env.NODE_ENV === "production" && !sessionSecret) {
+  throw new Error("SESSION_SECRET must be set in the environment or .env when NODE_ENV=production.");
+}
+
+await initializeDatabase();
 
 
 
@@ -66,9 +112,11 @@ app.set("views", path.join(__dirname, "..", "views"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "..", "public")));
+const sessionStore = new SQLiteSessionStore({ defaultTtlMs: sessionMaxAgeMs });
 app.use(session({
   name: sessionCookieName,
-  secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex"),
+  secret: sessionSecret || crypto.randomBytes(32).toString("hex"),
+  store: sessionStore,
   resave: false,
   saveUninitialized: false,
   rolling: true,
@@ -84,11 +132,12 @@ function buildCsrfToken() {
   return crypto.randomBytes(32).toString("hex");
 }
 
-function setAuthSession(req, userId) {
+function setAuthSession(req, userId, mustChangePassword = false) {
   req.session.user = { id: userId };
   req.session.authToken = crypto.randomBytes(24).toString("hex");
   req.session.authExpiresAt = Date.now() + sessionMaxAgeMs;
   req.session.csrfToken = buildCsrfToken();
+  req.session.mustChangePassword = Boolean(mustChangePassword);
 }
 
 function clearAuthSession(req) {
@@ -96,6 +145,11 @@ function clearAuthSession(req) {
   delete req.session.authToken;
   delete req.session.authExpiresAt;
   delete req.session.csrfToken;
+  delete req.session.mustChangePassword;
+}
+
+function getLoginRateLimitKey(req) {
+  return String(req.ip || req.socket?.remoteAddress || "unknown").trim().toLowerCase();
 }
 
 function buildNotifications(storeSettings) {
@@ -202,6 +256,7 @@ app.use((req, res, next) => {
   res.locals.quickSearch = req.path === "/inventory" ? String(req.query.search || "") : "";
   res.locals.quickSearchStatus = req.path === "/inventory" ? inventoryStatus : "all";
   res.locals.flash = req.session.flash || null;
+  res.locals.version = systemVersion;
   res.locals.appearance = {
     theme: "Light Mode",
     colorScheme: "Emerald",
@@ -225,6 +280,29 @@ app.use((req, res, next) => {
 function setFlash(req, type, message) {
   req.session.flash = { type, message };
 }
+
+app.use((req, res, next) => {
+  if (!req.session.user || !req.session.authToken) return next();
+  const currentUser = getUserById(req.session.user.id);
+  const mustChangePassword = Boolean(currentUser?.must_change_password);
+  req.session.mustChangePassword = mustChangePassword;
+  res.locals.forcePasswordChange = mustChangePassword;
+
+  if (!mustChangePassword) return next();
+
+  const allowSettingsView = req.method === "GET" && req.path === "/settings";
+  const allowPasswordChange = req.method === "POST" && req.path === "/settings/password";
+  const allowLogout = req.method === "POST" && req.path === "/logout";
+
+  if (allowSettingsView || allowPasswordChange || allowLogout) return next();
+
+  if (req.path.startsWith("/api/")) {
+    return res.status(403).json({ error: "Password change required." });
+  }
+
+  setFlash(req, "warning", "Change the default admin password before continuing.");
+  return res.redirect("/settings?tab=profile&forcePasswordChange=1");
+});
 
 function requireAuth(req, res, next) {
   if (!req.session.user || !req.session.authToken) {
@@ -383,6 +461,9 @@ app.get("/", requireAuth, (req, res) => {
     chartTitle: chartData.title,
     chartLabels: chartData.labels,
     chartDatasets: chartData.datasets,
+    weeklySeries: dashboard.weeklySeries,
+    monthlySeries: dashboard.monthlySeries,
+    categoryBreakdown: dashboard.categoryBreakdown,
     formatCurrency
   });
 });
@@ -400,7 +481,10 @@ app.get("/api/dashboard/overview", requireApiAuth, (req, res) => {
     bestSellingItem: dashboard.bestSellingItem,
     lowStockItems: sanitizeInventoryItems(dashboard.lowStockItems, isAdmin),
     pendingEloadRequests: dashboard.pendingEloadRequests,
-    pendingGcashRequests: dashboard.pendingGcashRequests
+    pendingGcashRequests: dashboard.pendingGcashRequests,
+    weeklySeries: dashboard.weeklySeries,
+    monthlySeries: dashboard.monthlySeries,
+    categoryBreakdown: dashboard.categoryBreakdown
   });
 });
 
@@ -426,6 +510,14 @@ app.get("/api/inventory", requireApiAuth, (req, res) => {
   });
 });
 
+app.get("/api/inventory/barcode/:barcode", requireApiAuth, (req, res) => {
+  const currentUser = getUserById(req.session.user.id);
+  const isAdmin = currentUser?.role === "Admin";
+  const item = getInventoryItemByBarcode(req.params.barcode);
+  if (!item) return res.status(404).json({ error: "Product not found." });
+  return res.json({ item: sanitizeInventoryItems([item], isAdmin)[0] });
+});
+
 app.get("/api/sales", requireApiAuth, requireSalesApiAccess, (req, res) => {
   const filter = normalizeSalesFilter(req.query.filter);
   const sales = listSales(filter);
@@ -440,7 +532,7 @@ app.get("/api/sales/metrics", requireApiAuth, requireSalesApiAccess, (req, res) 
   return res.json(getSalesMetrics());
 });
 
-app.get("/api/logs", requireApiAuth, requireAdminApi, (req, res) => {
+app.get("/api/logs", requireApiAuth, (req, res) => {
   const date = String(req.query.date || isoDateToday());
   return res.json(getLogsData(date));
 });
@@ -507,15 +599,30 @@ app.get("/login", (req, res) => {
   return res.render("login", { pageTitle: "Login" });
 });
 
-app.post("/login", (req, res) => {
-  const { username, password } = req.body;
-  const user = getUserByUsername(username);
-  if (!user || !verifyPassword(password, user.password_hash)) {
-    setFlash(req, "danger", "Invalid username or password.");
+app.post("/login", async (req, res) => {
+  const username = String(req.body.username || "").trim();
+  const password = String(req.body.password || "");
+  const rateLimitKey = getLoginRateLimitKey(req);
+  const protectionState = getLoginProtectionState(username, rateLimitKey);
+
+  if (protectionState.rateLimited || protectionState.accountLocked) {
+    setFlash(req, "danger", loginRateLimitMessage);
     return res.redirect("/login");
   }
+
+  const user = getUserAuthByUsername(username);
+  if (!user || !(await verifyPassword(password, user.password_hash))) {
+    const failedState = recordFailedLoginAttempt(username, rateLimitKey);
+    setFlash(req, "danger", (failedState.rateLimited || failedState.accountLocked) ? loginRateLimitMessage : "Invalid username or password.");
+    return res.redirect("/login");
+  }
+  clearFailedLoginAttempts(username, rateLimitKey);
   return req.session.regenerate(() => {
-    setAuthSession(req, user.id);
+    setAuthSession(req, user.id, user.must_change_password);
+    if (user.must_change_password) {
+      setFlash(req, "warning", "Change the default admin password before continuing.");
+      return req.session.save(() => res.redirect("/settings?tab=profile&forcePasswordChange=1"));
+    }
     setFlash(req, "success", "Welcome back.");
     return req.session.save(() => res.redirect("/"));
   });
@@ -555,6 +662,8 @@ app.get("/eload", requireAuth, (req, res) => {
     pageTitle: "Eload",
     todayLabel: todayLabel(),
     requests,
+    eloadNetworks: listEloadNetworks(),
+    eloadPromoCatalog: getEloadPromoCatalog(),
     requestsFingerprint: buildDigitalRequestsFingerprint(requests),
     formatCurrency,
     formatDateTime
@@ -586,7 +695,7 @@ app.post("/eload/requests", requireAuth, (req, res) => {
       const loadType = String(req.body.loadType || "").trim().toLowerCase();
       const network = String(req.body.network || "").trim().toUpperCase();
       const loadValue = String(req.body.loadValue || "").trim();
-      const amount = loadType === "regular" ? Number(req.body.amount || 0) : parseCurrencyAmount(loadValue);
+      const amount = Number(req.body.amount || 0);
 
       if (!network) throw new Error("Choose a network for the eload request.");
       if (!loadValue) throw new Error("Choose a load option for the eload request.");
@@ -652,9 +761,17 @@ app.post("/inventory/add", requireAuth, requireAdmin, (req, res) => {
   res.redirect("/inventory");
 });
 
-app.post("/inventory/:id/update", requireAuth, requireAdmin, (req, res) => {
+app.post("/inventory/:id/update", requireAuth, (req, res) => {
   try {
-    updateInventoryItem(Number(req.params.id), req.body);
+    const currentUser = getUserById(req.session.user.id);
+    const isAdmin = currentUser?.role === "Admin";
+    const itemId = Number(req.params.id);
+
+    if (isAdmin) {
+      updateInventoryItem(itemId, req.body);
+    } else {
+      updateInventoryItemStatus(itemId, req.body.status);
+    }
     setFlash(req, "success", "Inventory item updated.");
   } catch (error) {
     setFlash(req, "danger", error.message);
@@ -714,11 +831,7 @@ app.post("/sales/add", requireAuth, requireSalesAccess, (req, res) => {
   res.redirect("/sales");
 });
 
-app.get("/reports", requireAuth, requireAdmin, (req, res) => {
-  res.render("reports", { pageTitle: "Reports", todayLabel: todayLabel(), reports: getReportsData(), formatCurrency });
-});
-
-app.get("/logs", requireAuth, requireAdmin, (req, res) => {
+app.get("/logs", requireAuth, (req, res) => {
   const selectedDate = String(req.query.date || isoDateToday());
   res.render("logs", {
     pageTitle: "Logs",
@@ -730,6 +843,10 @@ app.get("/logs", requireAuth, requireAdmin, (req, res) => {
   });
 });
 
+app.get("/reports", requireAuth, (req, res) => {
+  res.redirect("/");
+});
+
 app.get("/best-selling", requireAuth, requireAdmin, (req, res) => {
   res.redirect("/");
 });
@@ -739,9 +856,10 @@ app.get("/settings", requireAuth, (req, res) => {
   const currentUser = getUserById(req.session.user.id);
   const isAdmin = currentUser?.role === "Admin";
   const allowedTabs = isAdmin
-    ? new Set(["store", "profile", "notifications", "appearance", "categories", "suppliers", "data"])
+    ? new Set(["store", "profile", "notifications", "appearance", "data"])
     : new Set(["profile", "appearance"]);
   const activeTab = allowedTabs.has(requestedTab) ? requestedTab : (isAdmin ? "store" : "profile");
+  const forcePasswordChange = Boolean(req.session.mustChangePassword || currentUser?.must_change_password);
 
   res.render("settings", {
     pageTitle: "Settings",
@@ -750,7 +868,9 @@ app.get("/settings", requireAuth, (req, res) => {
     userProfile: currentUser,
     categories: isAdmin ? listCategories() : [],
     suppliers: isAdmin ? listSuppliers() : [],
-    activeTab
+    eloadNetworks: isAdmin ? listEloadNetworks() : [],
+    activeTab: forcePasswordChange ? "profile" : activeTab,
+    forcePasswordChange
   });
 });
 
@@ -790,7 +910,7 @@ app.post("/settings/profile", requireAuth, (req, res) => {
   res.redirect("/settings");
 });
 
-app.post("/users/add", requireAuth, requireAdmin, (req, res) => {
+app.post("/users/add", requireAuth, requireAdmin, async (req, res) => {
   const username = String(req.body.username || "").trim();
   const fullName = String(req.body.fullName || "").trim();
   const email = String(req.body.email || "").trim();
@@ -804,7 +924,7 @@ app.post("/users/add", requireAuth, requireAdmin, (req, res) => {
   }
 
   try {
-    createUserAccount({
+    await createUserAccount({
       username,
       fullName,
       role,
@@ -819,7 +939,7 @@ app.post("/users/add", requireAuth, requireAdmin, (req, res) => {
   return res.redirect("/users");
 });
 
-app.post("/users/:id/update", requireAuth, requireAdmin, (req, res) => {
+app.post("/users/:id/update", requireAuth, requireAdmin, async (req, res) => {
   const targetUserId = Number(req.params.id);
   const targetUser = getUserById(targetUserId);
   const username = String(req.body.username || "").trim();
@@ -840,7 +960,7 @@ app.post("/users/:id/update", requireAuth, requireAdmin, (req, res) => {
   }
 
   try {
-    updateUserAccount(targetUserId, {
+    await updateUserAccount(targetUserId, {
       username,
       fullName,
       role,
@@ -855,9 +975,9 @@ app.post("/users/:id/update", requireAuth, requireAdmin, (req, res) => {
   return res.redirect("/users");
 });
 
-app.post("/settings/password", requireAuth, (req, res) => {
-  const user = getUserById(req.session.user.id);
-  if (!verifyPassword(req.body.currentPassword, user.password_hash)) {
+app.post("/settings/password", requireAuth, async (req, res) => {
+  const user = getUserAuthById(req.session.user.id);
+  if (!(await verifyPassword(req.body.currentPassword, user.password_hash))) {
     setFlash(req, "danger", "Current password is incorrect.");
     return res.redirect("/settings");
   }
@@ -865,18 +985,19 @@ app.post("/settings/password", requireAuth, (req, res) => {
     setFlash(req, "danger", "New passwords do not match.");
     return res.redirect("/settings");
   }
-  updatePassword(req.session.user.id, req.body.newPassword);
+  await updatePassword(req.session.user.id, req.body.newPassword);
+  req.session.mustChangePassword = false;
   setFlash(req, "success", "Password changed successfully.");
   return res.redirect("/settings");
 });
 
-app.post("/settings/pin", requireAuth, (req, res) => {
-  const user = getUserById(req.session.user.id);
+app.post("/settings/pin", requireAuth, async (req, res) => {
+  const user = getUserAuthById(req.session.user.id);
   if (user.role !== "Admin") {
     setFlash(req, "danger", "Only admin accounts can use a security PIN.");
     return res.redirect("/settings");
   }
-  if (!verifyPin(req.body.currentPin, user.pin_hash)) {
+  if (!(await verifyPin(req.body.currentPin, user.pin_hash))) {
     setFlash(req, "danger", "Current PIN is incorrect.");
     return res.redirect("/settings");
   }
@@ -912,7 +1033,7 @@ app.post("/settings/categories/add", requireAuth, requireAdmin, (req, res) => {
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
-  res.redirect("/settings?tab=categories");
+  res.redirect("/inventory");
 });
 
 app.post("/settings/categories/:id/update", requireAuth, requireAdmin, (req, res) => {
@@ -922,7 +1043,7 @@ app.post("/settings/categories/:id/update", requireAuth, requireAdmin, (req, res
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
-  res.redirect("/settings?tab=categories");
+  res.redirect("/inventory");
 });
 
 app.post("/settings/categories/:id/delete", requireAuth, requireAdmin, (req, res) => {
@@ -932,7 +1053,7 @@ app.post("/settings/categories/:id/delete", requireAuth, requireAdmin, (req, res
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
-  res.redirect("/settings?tab=categories");
+  res.redirect("/inventory");
 });
 
 app.post("/settings/suppliers/add", requireAuth, requireAdmin, (req, res) => {
@@ -942,7 +1063,7 @@ app.post("/settings/suppliers/add", requireAuth, requireAdmin, (req, res) => {
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
-  res.redirect("/settings?tab=suppliers");
+  res.redirect("/inventory");
 });
 
 app.post("/settings/suppliers/:id/update", requireAuth, requireAdmin, (req, res) => {
@@ -952,7 +1073,7 @@ app.post("/settings/suppliers/:id/update", requireAuth, requireAdmin, (req, res)
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
-  res.redirect("/settings?tab=suppliers");
+  res.redirect("/inventory");
 });
 
 app.post("/settings/suppliers/:id/delete", requireAuth, requireAdmin, (req, res) => {
@@ -962,7 +1083,57 @@ app.post("/settings/suppliers/:id/delete", requireAuth, requireAdmin, (req, res)
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
-  res.redirect("/settings?tab=suppliers");
+  res.redirect("/inventory");
+});
+
+app.post("/settings/eload/networks/add", requireAuth, requireAdmin, (req, res) => {
+  try {
+    createEloadNetwork(req.body);
+    setFlash(req, "success", "eLoad network added.");
+  } catch (error) {
+    setFlash(req, "danger", error.message);
+  }
+  res.redirect("/eload#view-set");
+});
+
+app.post("/settings/eload/networks/:id/delete", requireAuth, requireAdmin, (req, res) => {
+  try {
+    deleteEloadNetwork(Number(req.params.id));
+    setFlash(req, "success", "eLoad network deleted.");
+  } catch (error) {
+    setFlash(req, "danger", error.message);
+  }
+  res.redirect("/eload#view-set");
+});
+
+app.post("/settings/eload/promos/add", requireAuth, requireAdmin, (req, res) => {
+  try {
+    createEloadPromo(req.body);
+    setFlash(req, "success", "eLoad promo added.");
+  } catch (error) {
+    setFlash(req, "danger", error.message);
+  }
+  res.redirect("/eload#view-set");
+});
+
+app.post("/settings/eload/promos/:id/update", requireAuth, requireAdmin, (req, res) => {
+  try {
+    updateEloadPromo(Number(req.params.id), req.body);
+    setFlash(req, "success", "eLoad promo updated.");
+  } catch (error) {
+    setFlash(req, "danger", error.message);
+  }
+  res.redirect("/eload#view-set");
+});
+
+app.post("/settings/eload/promos/:id/delete", requireAuth, requireAdmin, (req, res) => {
+  try {
+    deleteEloadPromo(Number(req.params.id));
+    setFlash(req, "success", "eLoad promo deleted.");
+  } catch (error) {
+    setFlash(req, "danger", error.message);
+  }
+  res.redirect("/eload#view-set");
 });
 
 app.get("/settings/export/inventory.csv", requireAuth, requireAdmin, (req, res) => {
@@ -981,10 +1152,23 @@ app.get("/settings/backup", requireAuth, requireAdmin, (req, res) => {
   res.download(getDatabasePath(), "store-backup.db");
 });
 
-app.post("/settings/reset", requireAuth, requireAdmin, (req, res) => {
+app.post("/settings/reset", requireAuth, requireAdmin, async (req, res) => {
+  const currentUser = getUserAuthById(req.session.user.id);
+  const currentPassword = String(req.body.currentPassword || "");
+
+  if (!currentPassword) {
+    setFlash(req, "danger", "Enter your current admin password to continue.");
+    return res.redirect("/settings?tab=data");
+  }
+
+  if (!currentUser || !(await verifyPassword(currentPassword, currentUser.password_hash))) {
+    setFlash(req, "danger", "Incorrect admin password. Data reset was canceled.");
+    return res.redirect("/settings?tab=data");
+  }
+
   resetAllData();
-  setFlash(req, "warning", "All data reset to the seeded Figma sample content.");
-  res.redirect("/settings");
+  setFlash(req, "success", "All application records were permanently deleted. Accounts, settings, and configuration were kept intact.");
+  res.redirect("/settings?tab=data");
 });
 
 app.use((req, res) => {
@@ -993,10 +1177,4 @@ app.use((req, res) => {
 
 app.listen(port, () => {
   console.log(`Sari-Sari Store app running at http://localhost:${port}`);
-  console.log('ADMIN Credentials');
-  console.log('   Username:  admin');
-  console.log('   Password:  admin123');
-  console.log('USER Credentials');
-  console.log('   Username:  user');
-  console.log('   Password:  user123');
 });

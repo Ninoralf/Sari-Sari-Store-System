@@ -8,7 +8,7 @@
 
       <!-- View Toggle Switch -->
       <div class="d-flex justify-content-center mb-4">
-        <div class="nav nav-pills bg-light p-1 rounded-pill shadow-sm" style="width: 320px;" role="tablist">
+        <div class="nav nav-pills bg-light p-1 rounded-pill shadow-sm" style="width: 440px; max-width: 100%;" role="tablist">
           <button class="nav-link active rounded-pill py-2 border-0 flex-grow-1" id="nav-request-tab" data-bs-toggle="tab" data-bs-target="#view-request" type="button" role="tab" aria-controls="view-request" aria-selected="true">
             <i class="bi bi-plus-circle me-2"></i>Request
           </button>
@@ -21,6 +21,11 @@
               </span>
             <% } %>
           </button>
+          <% if (user && user.role === "Admin") { %>
+            <button class="nav-link rounded-pill py-2 border-0 flex-grow-1" id="nav-set-tab" data-bs-toggle="tab" data-bs-target="#view-set" type="button" role="tab" aria-controls="view-set" aria-selected="false">
+              <i class="bi bi-sliders me-2"></i>SET
+            </button>
+          <% } %>
         </div>
       </div>
 
@@ -136,11 +141,27 @@
                       <span class="badge rounded-circle bg-dark text-white d-inline-flex align-items-center justify-content-center" style="width: 28px; height: 28px;">2</span>
                       <span class="fw-bold text-uppercase small">Choose Transaction Flow</span>
                     </div>
-                    <div class="d-flex gap-2 p-1 bg-light rounded-pill">
+                    <div class="row g-2">
                       <input class="btn-check" type="radio" name="cashFlow" id="flowIn" value="Cash In" checked>
-                      <label class="btn btn-white btn-sm flex-grow-1 rounded-pill border-0 py-2 shadow-sm" for="flowIn">CASH IN</label>
+                      <div class="col-6">
+                        <label class="gcash-flow-option gcash-flow-in h-100" for="flowIn">
+                          <span class="gcash-flow-icon"><i class="bi bi-arrow-down-circle"></i></span>
+                          <span>
+                            <span class="gcash-flow-title">Cash In</span>
+                            <span class="gcash-flow-note">Receive money</span>
+                          </span>
+                        </label>
+                      </div>
                       <input class="btn-check" type="radio" name="cashFlow" id="flowOut" value="Cash Out">
-                      <label class="btn btn-white btn-sm flex-grow-1 rounded-pill border-0 py-2 shadow-sm" for="flowOut">CASH OUT</label>
+                      <div class="col-6">
+                        <label class="gcash-flow-option gcash-flow-out h-100" for="flowOut">
+                          <span class="gcash-flow-icon"><i class="bi bi-arrow-up-circle"></i></span>
+                          <span>
+                            <span class="gcash-flow-title">Cash Out</span>
+                            <span class="gcash-flow-note">Release money</span>
+                          </span>
+                        </label>
+                      </div>
                     </div>
                   </div>
 
@@ -240,7 +261,7 @@
                           <button class="btn btn-sm btn-outline-danger px-3 rounded-pill" data-bs-toggle="modal" data-bs-target="#failRequestModal" data-request-id="<%= req.id %>" data-request-code="<%= req.request_code %>">
                             <i class="bi bi-x-circle"></i>
                           </button>
-                          <button class="btn btn-sm btn-outline-secondary px-3 rounded-pill" onclick="navigator.clipboard.writeText('<%= req.mobile_number %>')" title="Copy Number">
+                          <button class="btn btn-sm btn-outline-secondary px-3 rounded-pill" onclick="copyToClipboard('<%= req.mobile_number %>', this)" title="Copy Number">
                             <i class="bi bi-clipboard"></i>
                           </button>
                         </div>
@@ -274,7 +295,20 @@
                 </div>
 
                 <div class="vstack gap-3">
-                  <% const recent = requests.filter(r => r.status !== 'Pending').reverse().slice(0, 10); %>
+                  <%
+                    const todayKey = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+                    const recent = requests
+                      .filter((r) => {
+                        if (r.status === "Pending") return false;
+                        const resolvedAt = r.status === "Completed" ? r.completed_at : r.failed_at;
+                        if (!resolvedAt) return false;
+                        const resolvedDate = new Date(`${String(resolvedAt).replace(" ", "T")}Z`);
+                        const resolvedKey = resolvedDate.toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+                        return resolvedKey === todayKey;
+                      })
+                      .reverse()
+                      .slice(0, 10);
+                  %>
                   <% if (!recent.length) { %>
                     <div class="text-center py-5 opacity-50">
                       <div class="fw-bold text-muted">No history yet</div>
@@ -283,9 +317,14 @@
                     <% recent.forEach(req => { %>
                       <div class="p-3 bg-light rounded-4 border-start border-4 <%= req.status === 'Completed' ? 'border-success' : 'border-danger' %>">
                         <div class="d-flex justify-content-between align-items-center">
-                          <div>
-                            <div class="fw-bold"><%= req.mobile_number %></div>
-                            <div class="mini-note text-muted"><%= req.service_type.toUpperCase() %> | <%= req.status %></div>
+                          <div class="d-flex align-items-center gap-3">
+                            <div>
+                              <div class="fw-bold"><%= req.mobile_number %></div>
+                              <div class="mini-note text-muted"><%= req.service_type.toUpperCase() %> | <%= req.status %></div>
+                            </div>
+                            <button class="btn btn-sm btn-link text-secondary p-0" onclick="copyToClipboard('<%= req.mobile_number %>', this)" title="Copy Number">
+                              <i class="bi bi-clipboard small"></i>
+                            </button>
                           </div>
                           <div class="text-end">
                             <div class="fw-bold">₱<%= req.amount.toLocaleString() %></div>
@@ -300,8 +339,75 @@
             </div>
           </div>
         </div>
+        <% if (user && user.role === "Admin") { %>
+        <div class="tab-pane fade" id="view-set" role="tabpanel" aria-labelledby="nav-set-tab">
+          <div class="content-card p-4 mb-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+              <div>
+                <div class="section-title">eLoad Networks</div>
+                <div class="mini-note">Manage networks and the promo list shown in the eLoad request tab.</div>
+              </div>
+              <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addEloadNetworkModal"><i class="bi bi-plus-lg me-2"></i>Add Network</button>
+            </div>
+            <% if (!eloadNetworks.length) { %>
+              <div class="text-center py-4 mini-note">No eLoad networks added yet.</div>
+            <% } else { %>
+              <div class="vstack gap-3">
+                <% eloadNetworks.forEach((network) => { %>
+                  <div class="border rounded-4 p-3">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                      <div>
+                        <div class="fw-bold fs-5"><%= network.network_name %></div>
+                        <div class="mini-note"><%= network.promos.length %> promo<%= network.promos.length === 1 ? '' : 's' %></div>
+                      </div>
+                      <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#addEloadPromoModal-<%= network.network_id %>"><i class="bi bi-plus-lg me-1"></i>Add Promo</button>
+                        <form method="post" action="/settings/eload/networks/<%= network.network_id %>/delete" onsubmit="return confirm('Delete this network and all of its promos?');">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                          <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                        </form>
+                      </div>
+                    </div>
+                    <div class="table-responsive">
+                      <table class="table align-middle mb-0">
+                        <thead>
+                          <tr>
+                            <th>Promo Name</th>
+                            <th class="text-end">Selling Price</th>
+                            <th class="text-end">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <% if (!network.promos.length) { %>
+                            <tr><td colspan="3" class="text-center py-3 mini-note">No promos added for this network.</td></tr>
+                          <% } else { %>
+                            <% network.promos.forEach((promo) => { %>
+                              <tr>
+                                <td class="fw-semibold"><%= promo.promo_name %></td>
+                                <td class="text-end">₱<%= Number(promo.selling_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></td>
+                                <td class="text-end">
+                                  <button class="btn btn-sm btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#editEloadPromoModal-<%= promo.promo_id %>"><i class="bi bi-pencil"></i></button>
+                                  <form class="d-inline" method="post" action="/settings/eload/promos/<%= promo.promo_id %>/delete" onsubmit="return confirm('Delete this promo?');">
+                                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                    <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                                  </form>
+                                </td>
+                              </tr>
+                            <% }) %>
+                          <% } %>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+          </div>
+        </div>
+        <% } %>
       </div>
     </section>
+    <%- include("partials/footer") %>
   </main>
 </div>
 <div class="modal fade" id="failRequestModal" tabindex="-1" aria-labelledby="failRequestModalLabel" aria-hidden="true">
@@ -329,16 +435,65 @@
     </div>
   </div>
 </div>
+<% if (user && user.role === "Admin") { %>
+<div class="modal fade" id="addEloadNetworkModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="/settings/eload/networks/add">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="modal-header"><h5 class="modal-title">Add eLoad Network</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <label class="form-label">Network Name</label>
+          <input class="form-control text-uppercase" name="networkName" placeholder="e.g. SNT" required>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-success">Save Network</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+<% eloadNetworks.forEach((network) => { %>
+  <div class="modal fade" id="addEloadPromoModal-<%= network.network_id %>" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <form method="post" action="/settings/eload/promos/add">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="networkId" value="<%= network.network_id %>">
+          <div class="modal-header"><h5 class="modal-title">Add Promo for <%= network.network_name %></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body">
+            <div class="row g-3">
+              <div class="col-md-7"><label class="form-label">Promo Name</label><input class="form-control" name="promoName" placeholder="e.g. SNT30" required></div>
+              <div class="col-md-5"><label class="form-label">Selling Price</label><input class="form-control" name="sellingPrice" type="number" min="1" step="0.01" placeholder="0.00" required></div>
+            </div>
+          </div>
+          <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-success">Save Promo</button></div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <% network.promos.forEach((promo) => { %>
+    <div class="modal fade" id="editEloadPromoModal-<%= promo.promo_id %>" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <form method="post" action="/settings/eload/promos/<%= promo.promo_id %>/update">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <div class="modal-header"><h5 class="modal-title">Edit Promo for <%= network.network_name %></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+              <div class="row g-3">
+                <div class="col-md-7"><label class="form-label">Promo Name</label><input class="form-control" name="promoName" value="<%= promo.promo_name %>" required></div>
+                <div class="col-md-5"><label class="form-label">Selling Price</label><input class="form-control" name="sellingPrice" type="number" min="1" step="0.01" value="<%= promo.selling_price %>" required></div>
+              </div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-success">Update Promo</button></div>
+          </form>
+        </div>
+      </div>
+    </div>
+  <% }) %>
+<% }) %>
+<% } %>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  const networkPromos = {
-    TM: ["EZ50", "ASTIG99", "ALLNET20", "EASYSURF50"],
-    GLOBE: ["GO59", "GO+99", "GOUNLI129", "SURF4ALL99"],
-    SMART: ["ALL DATA 50", "MAGICSARAP99", "POWER ALL 99", "GIGA VIDEO 99"],
-    TNT: ["TNT PANALO 30", "SURFSAYA 50", "ALL DATA 99", "SAYA ALL 99"],
-    SUN: ["CTC50", "TU200", "SURF50", "UNLI TXT 50"],
-    DITO: ["DITO 10", "DITO 50", "LEVEL-UP 99", "UNLI 5G 149"]
-  };
+  const networkPromos = <%- JSON.stringify(eloadPromoCatalog || {}) %>;
 
   const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
   const eloadForm = document.getElementById("eloadForm");
@@ -375,14 +530,77 @@
     return m ? Number(m[m.length-1]) : 0;
   }
 
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function getSelectedPromo() {
+    if (!selectedNetwork) return null;
+    return (networkPromos[selectedNetwork] || []).find((promo) => promo.name === eloadPromoSelect.value) || null;
+  }
+
+  function copyToClipboard(text, btn) {
+    const rawNumber = String(text || "").replace(/\D/g, "");
+    const icon = btn.querySelector("i");
+    const originalClass = icon.className;
+    const originalTitle = btn.title;
+
+    function showSuccess() {
+      icon.className = "bi bi-check-lg text-success";
+      btn.title = "Copied!";
+      setTimeout(() => {
+        icon.className = originalClass;
+        btn.title = originalTitle;
+      }, 2000);
+    }
+
+    if (!navigator.clipboard) {
+      const textArea = document.createElement("textarea");
+      textArea.value = rawNumber;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      textArea.style.top = "0";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        if (document.execCommand('copy')) showSuccess();
+      } catch (err) {
+        console.error("Fallback copy failed", err);
+      }
+      document.body.removeChild(textArea);
+      return;
+    }
+
+    navigator.clipboard.writeText(rawNumber).then(showSuccess, (err) => {
+      console.error("Async copy failed", err);
+    });
+  }
+
   function renderNetworks() {
-    eloadNetworkGrid.innerHTML = Object.keys(networkPromos).map(net => `
-      <div class="col-4 col-md-2">
-        <button type="button" class="btn w-100 py-2 border rounded-3 network-btn ${selectedNetwork === net ? 'btn-primary border-primary' : 'btn-white'}" data-network="${net}">
-          <div class="fw-bold small">${net}</div>
-        </button>
-      </div>
-    `).join("");
+    eloadNetworkGrid.replaceChildren();
+    Object.keys(networkPromos).forEach((net) => {
+      const column = document.createElement("div");
+      column.className = "col-4 col-md-2";
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `btn w-100 py-2 border rounded-3 network-btn ${selectedNetwork === net ? "btn-primary border-primary" : "btn-white"}`;
+      button.dataset.network = net;
+
+      const label = document.createElement("div");
+      label.className = "fw-bold small";
+      label.textContent = net;
+
+      button.appendChild(label);
+      column.appendChild(button);
+      eloadNetworkGrid.appendChild(column);
+    });
   }
 
   function updateEloadValues() {
@@ -392,7 +610,7 @@
 
     if (type === "promo") {
       val = eloadPromoSelect.value;
-      amt = parseAmount(val);
+      amt = Number(getSelectedPromo()?.price || parseAmount(val));
     } else {
       amt = Number(eloadRegularAmount.value || 0);
       val = amt ? `Regular ${amt}` : "";
@@ -414,7 +632,17 @@
     renderNetworks();
     
     eloadPromoSelect.disabled = false;
-    eloadPromoSelect.innerHTML = `<option value="">Select Promo</option>` + networkPromos[selectedNetwork].map(p => `<option value="${p}">${p}</option>`).join("");
+    eloadPromoSelect.replaceChildren();
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.textContent = "Select Promo";
+    eloadPromoSelect.appendChild(defaultOption);
+    (networkPromos[selectedNetwork] || []).forEach((promo) => {
+      const option = document.createElement("option");
+      option.value = String(promo.name || "");
+      option.textContent = `${String(promo.name || "")} - ${peso.format(Number(promo.price || 0))}`;
+      eloadPromoSelect.appendChild(option);
+    });
     updateEloadValues();
   });
 
@@ -467,5 +695,9 @@
 
   // Init
   renderNetworks();
+  if (window.location.hash === "#view-set") {
+    const setTab = document.getElementById("nav-set-tab");
+    if (setTab && window.bootstrap) bootstrap.Tab.getOrCreateInstance(setTab).show();
+  }
 </script></body>
 </html>

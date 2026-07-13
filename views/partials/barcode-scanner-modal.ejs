@@ -1,0 +1,25 @@
+<div class="modal fade barcode-scanner-modal" id="<%= typeof scannerModalId !== 'undefined' ? scannerModalId : 'barcodeScannerModal' %>" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+    <div class="modal-content border-0">
+      <div class="modal-header border-0">
+        <div>
+          <div class="mini-note text-uppercase fw-bold">Camera Scanner</div>
+          <h2 class="modal-title h5 mb-0" data-barcode-scanner-title>Scan Barcode</h2>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body pt-0">
+        <div class="barcode-scanner-status alert py-2 small mb-3" data-barcode-scanner-status hidden></div>
+        <div class="barcode-scanner-camera-row mb-3">
+          <label class="form-label small fw-bold mb-1" for="<%= typeof scannerModalId !== 'undefined' ? scannerModalId : 'barcodeScannerModal' %>CameraSelect">Camera</label>
+          <select class="form-select form-select-sm" id="<%= typeof scannerModalId !== 'undefined' ? scannerModalId : 'barcodeScannerModal' %>CameraSelect" data-barcode-camera-select></select>
+        </div>
+        <div class="barcode-scanner-viewfinder" data-barcode-viewfinder></div>
+        <div class="mini-note text-center mt-3">EAN, UPC, Code128, Code39, Code93, Codabar, ITF, and QR Code</div>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
