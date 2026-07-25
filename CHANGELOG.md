@@ -2,7 +2,23 @@
 
 All notable changes to the Sari-Sari Store Management System are documented here.
 
-This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.7.0`.
+This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.8.0`.
+
+## [1.8.0] - 2026-07-26
+
+### What's New
+- Added a dedicated Quick POS Home for User accounts with a large barcode scan action and manual barcode entry.
+- Scanned or entered barcodes now transition Users to Sales and add the matched product through the existing cart workflow.
+- Product names now present their final parenthesized value as a separate variant line across product cards, inventory results, dashboard displays, print output, and the cart.
+
+### Changed
+- Admin accounts retain the existing analytics dashboard, while User accounts open the focused Quick POS Home instead.
+- Dashboard analytics endpoints are now Admin-only, and User notifications no longer include sales-summary statistics.
+- Redesigned the mobile cart summary into a compact total-first section, with cart item and quantity counts shown as secondary details.
+
+### Fixed
+- Kept the floating cart control anchored to the viewport’s bottom center during cart updates by preserving its centering transform during the pulse animation.
+- Product-name formatting is presentation-only; stored SQLite names, search behavior, and barcode workflows remain unchanged.
 
 ## [1.7.0] - 2026-07-09
 

@@ -73,7 +73,7 @@
         <div class="mini-note">Review the order here while the product list stays open.</div>
       </div>
       <div class="d-flex align-items-center gap-2">
-        <button class="btn btn-outline-secondary" type="button" id="newCustomerButton">New Customer</button>
+        <button class="btn btn-outline-secondary" type="button" id="newCustomerButton">Clear</button>
         <button class="btn btn-outline-secondary pos-cart-close" type="button" id="closeCartButton" aria-label="Close cart">
           <i class="bi bi-x-lg"></i>
         </button>
@@ -99,24 +99,14 @@
       </table>
     </div>
 
-    <div class="row g-2 g-lg-3 mt-1 pos-cart-summary-grid">
-      <div class="col-6 col-lg-4">
-        <div class="content-card p-2 p-lg-3 h-100 pos-cart-summary-card">
-          <div class="mini-note pos-cart-summary-label">Cart Items</div>
-          <div class="h3 mb-0 pos-cart-summary-value" id="cartItemCount">0</div>
-        </div>
+    <div class="pos-cart-summary mt-2">
+      <div class="pos-cart-total">
+        <div class="mini-note text-uppercase fw-bold">Grand Total</div>
+        <div class="text-success fw-bold pos-cart-summary-money" id="saleGrandTotal">PHP 0.00</div>
       </div>
-      <div class="col-6 col-lg-4">
-        <div class="content-card p-2 p-lg-3 h-100 pos-cart-summary-card">
-          <div class="mini-note pos-cart-summary-label">Total Quantity</div>
-          <div class="h3 mb-0 pos-cart-summary-value" id="cartUnitCount">0</div>
-        </div>
-      </div>
-      <div class="col-12 col-lg-4">
-        <div class="content-card p-2 p-lg-3 h-100 pos-cart-summary-card">
-          <div class="mini-note pos-cart-summary-label">Grand Total</div>
-          <div class="h3 mb-0 text-success pos-cart-summary-value pos-cart-summary-money" id="saleGrandTotal">PHP 0.00</div>
-        </div>
+      <div class="pos-cart-summary-meta mini-note">
+        <span><strong id="cartItemCount">0</strong> Cart Items</span>
+        <span><strong id="cartUnitCount">0</strong> Total Quantity</span>
       </div>
     </div>
 
@@ -173,7 +163,8 @@
         return {
           id: item.id,
           type: "inventory",
-          name: item.name,
+          name: item.displayName || item.name,
+          variant: item.displayVariant || "",
           price: item.selling_price,
           quantity: Math.max(1, Number(entry.quantity) || 1)
         };
@@ -268,7 +259,8 @@
           <div class="product-card h-100" onclick="addItemToCart(${item.id}, 1)">
             <div class="product-card-body">
               <div class="category-tag mb-2">${escapeHtml(item.category)}</div>
-              <div class="product-name fw-bold mb-1">${escapeHtml(item.name)}</div>
+          <div class="product-name fw-bold mb-1">${escapeHtml(item.displayName || item.name)}</div>
+          ${item.displayVariant ? `<div class="mini-note mb-1">${escapeHtml(item.displayVariant)}</div>` : ""}
               <div class="product-price text-success fw-bold">${peso.format(item.selling_price)}</div>
             </div>
             <div class="product-card-footer mt-auto pt-2">
@@ -294,14 +286,15 @@
       cart.push({
         id: item.id,
         type: "inventory",
-        name: item.name,
+        name: item.displayName || item.name,
+        variant: item.displayVariant || "",
         price: item.selling_price,
         quantity: quantity
       });
     }
 
     renderCart();
-    showSalesAlert("success", `Added ${item.name} to cart.`);
+    showSalesAlert("success", `Added ${item.displayName || item.name} to cart.`);
     
     // Pulse animation for cart fab
     const fab = document.getElementById("globalCartToggleButton");
@@ -334,7 +327,7 @@
         <tr>
           <td>
             <div class="fw-semibold">${escapeHtml(item.name)}</div>
-            <div class="mini-note">${item.type === "eload" ? `${escapeHtml(item.network)} | ${escapeHtml(item.mobileNumber)}` : "Product"}</div>
+            <div class="mini-note">${item.type === "eload" ? `${escapeHtml(item.network)} | ${escapeHtml(item.mobileNumber)}` : escapeHtml(item.variant || "Product")}</div>
           </td>
           <td class="text-end">${peso.format(item.price)}</td>
           <td>
@@ -475,6 +468,12 @@
   // Initial render
   renderSuggestions();
   renderCart();
+
+  const barcodeFromDashboard = new URLSearchParams(window.location.search).get("barcode");
+  if (barcodeFromDashboard) {
+    window.history.replaceState({}, document.title, "/sales");
+    addBarcodeToCart(barcodeFromDashboard);
+  }
 </script>
 </body>
 </html>

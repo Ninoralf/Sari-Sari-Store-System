@@ -1,0 +1,59 @@
+<%- include("partials/head") %>
+<div class="app-shell d-lg-flex">
+  <%- include("partials/sidebar") %>
+  <main class="flex-grow-1">
+    <%- include("partials/topbar") %>
+    <section class="p-3 p-lg-4">
+      <%- include("partials/flash") %>
+      <div class="content-card p-4 p-lg-5 text-center">
+        <div class="mini-note text-uppercase fw-bold text-success">Point of Sale</div>
+        <h2 class="display-6 fw-bold mb-2">Quick POS Home</h2>
+        <p class="text-secondary mb-4">Scan a product barcode or enter it manually to start a sale.</p>
+
+        <div class="mx-auto" style="max-width: 680px;">
+          <button class="btn btn-success btn-lg px-5 py-3 mb-4" type="button" id="quickPosScanButton">
+            <i class="bi bi-camera me-2"></i>Scan Product
+          </button>
+
+          <div class="input-group input-group-lg">
+            <span class="input-group-text bg-transparent"><i class="bi bi-upc-scan"></i></span>
+            <input class="form-control" id="quickPosBarcodeInput" placeholder="Enter barcode, then press Enter" autocomplete="off" autofocus>
+          </div>
+          <div class="mini-note mt-2">The product will be added to the current cart on the Sales page.</div>
+        </div>
+      </div>
+    </section>
+    <%- include("partials/footer") %>
+  </main>
+</div>
+
+<%- include("partials/barcode-scanner-modal", { scannerModalId: "quickPosBarcodeScannerModal" }) %>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="/js/barcode-scanner.js"></script>
+<script>
+  const barcodeInput = document.getElementById("quickPosBarcodeInput");
+  const scanButton = document.getElementById("quickPosScanButton");
+  const barcodeScanner = new BarcodeScanner({ modalId: "quickPosBarcodeScannerModal" });
+
+  function openSalesWithBarcode(value) {
+    const barcode = String(value || "").trim();
+    if (!barcode) return;
+    window.location.href = `/sales?barcode=${encodeURIComponent(barcode)}`;
+  }
+
+  scanButton.addEventListener("click", () => {
+    barcodeScanner.open({
+      title: "Scan Product Barcode",
+      onScan: openSalesWithBarcode
+    });
+  });
+
+  barcodeInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    openSalesWithBarcode(barcodeInput.value);
+  });
+</script>
+</body>
+</html>

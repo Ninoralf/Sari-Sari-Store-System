@@ -63,6 +63,7 @@ import {
   getInventorySummary
 } from "./db.js";
 import { SQLiteSessionStore } from "./sqlite-session-store.js";
+import { formatProductName } from "./product-name.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -152,10 +153,10 @@ function getLoginRateLimitKey(req) {
   return String(req.ip || req.socket?.remoteAddress || "unknown").trim().toLowerCase();
 }
 
-function buildNotifications(storeSettings) {
+function buildNotifications(storeSettings, userRole = "Admin") {
   const notifications = [];
   const inventory = listInventory("");
-  const metrics = getSalesMetrics();
+  const metrics = userRole === "Admin" ? getSalesMetrics() : null;
   const pendingDigitalRequests = listDigitalServiceRequests().filter((request) => request.status === "Pending");
   const pendingEloadRequests = pendingDigitalRequests.filter((request) => request.service_type === "eload");
   const pendingGcashRequests = pendingDigitalRequests.filter((request) => request.service_type === "gcash");
@@ -195,7 +196,7 @@ function buildNotifications(storeSettings) {
     });
   }
 
-  if (storeSettings.daily_sales_alert) {
+  if (userRole === "Admin" && storeSettings.daily_sales_alert) {
     notifications.push({
       tone: "success",
       icon: "bi-cash-stack",
@@ -204,7 +205,7 @@ function buildNotifications(storeSettings) {
     });
   }
 
-  if (storeSettings.weekly_sales_alert) {
+  if (userRole === "Admin" && storeSettings.weekly_sales_alert) {
     notifications.push({
       tone: "info",
       icon: "bi-calendar-week",
@@ -251,7 +252,7 @@ app.use((req, res, next) => {
   res.locals.currentPath = req.path;
   res.locals.user = req.session.user ? getUserById(req.session.user.id) : null;
   res.locals.store = storeSettings;
-  res.locals.notifications = req.session.user ? buildNotifications(storeSettings) : [];
+  res.locals.notifications = req.session.user ? buildNotifications(storeSettings, res.locals.user?.role) : [];
   res.locals.csrfToken = req.session.csrfToken;
   res.locals.quickSearch = req.path === "/inventory" ? String(req.query.search || "") : "";
   res.locals.quickSearchStatus = req.path === "/inventory" ? inventoryStatus : "all";
@@ -406,11 +407,19 @@ function normalizeRole(value) {
 }
 
 function sanitizeInventoryItems(items, isAdmin) {
-  if (isAdmin) return items;
   return items.map((item) => {
-    const { unit_price, profit, ...rest } = item;
-    return rest;
+    const sanitizedItem = isAdmin
+      ? item
+      : (({ unit_price, profit, ...rest }) => rest)(item);
+    const displayName = formatProductName(sanitizedItem.name);
+    return { ...sanitizedItem, displayName: displayName.name, displayVariant: displayName.variant };
   });
+}
+
+function decorateProductName(item) {
+  if (!item) return item;
+  const displayName = formatProductName(item.name);
+  return { ...item, displayName: displayName.name, displayVariant: displayName.variant };
 }
 
 function isFourDigitPin(value) {
@@ -447,9 +456,14 @@ function buildDigitalRequestsFingerprint(requests) {
 app.get("/", requireAuth, (req, res) => {
   const currentUser = getUserById(req.session.user.id);
   const isAdmin = currentUser?.role === "Admin";
+
+  if (!isAdmin) {
+    return res.render("user-dashboard", { pageTitle: "Quick POS Home", todayLabel: todayLabel() });
+  }
+
   const dashboard = getDashboardData();
   const chartData = getDashboardChartData();
-  res.render("dashboard", {
+  return res.render("dashboard", {
     pageTitle: "Dashboard",
     todayLabel: todayLabel(),
     currentDateLabel: formatLongDate(isoDateToday()),
@@ -457,7 +471,7 @@ app.get("/", requireAuth, (req, res) => {
     lowStockItems: sanitizeInventoryItems(dashboard.lowStockItems, isAdmin),
     pendingEloadRequests: dashboard.pendingEloadRequests,
     pendingGcashRequests: dashboard.pendingGcashRequests,
-    bestSellingItem: dashboard.bestSellingItem,
+    bestSellingItem: decorateProductName(dashboard.bestSellingItem),
     chartTitle: chartData.title,
     chartLabels: chartData.labels,
     chartDatasets: chartData.datasets,
@@ -468,17 +482,17 @@ app.get("/", requireAuth, (req, res) => {
   });
 });
 
-app.get("/api/dashboard/chart", requireApiAuth, (req, res) => {
+app.get("/api/dashboard/chart", requireApiAuth, requireAdminApi, (req, res) => {
   return res.json(getDashboardChartData());
 });
 
-app.get("/api/dashboard/overview", requireApiAuth, (req, res) => {
+app.get("/api/dashboard/overview", requireApiAuth, requireAdminApi, (req, res) => {
   const currentUser = getUserById(req.session.user.id);
   const isAdmin = currentUser?.role === "Admin";
   const dashboard = getDashboardData();
   return res.json({
     metrics: dashboard.metrics,
-    bestSellingItem: dashboard.bestSellingItem,
+    bestSellingItem: decorateProductName(dashboard.bestSellingItem),
     lowStockItems: sanitizeInventoryItems(dashboard.lowStockItems, isAdmin),
     pendingEloadRequests: dashboard.pendingEloadRequests,
     pendingGcashRequests: dashboard.pendingGcashRequests,
@@ -489,8 +503,9 @@ app.get("/api/dashboard/overview", requireApiAuth, (req, res) => {
 });
 
 app.get("/api/notifications", requireApiAuth, (req, res) => {
+  const currentUser = getUserById(req.session.user.id);
   return res.json({
-    notifications: buildNotifications(getStoreSettings())
+    notifications: buildNotifications(getStoreSettings(), currentUser?.role)
   });
 });
 
@@ -796,7 +811,6 @@ app.get("/sales", requireAuth, requireSalesAccess, (req, res) => {
   res.render("sales", {
     pageTitle: "Sales",
     todayLabel: todayLabel(),
-    metrics: getSalesMetrics(),
     saleDateDefault: isoDateToday(),
     inventory: sanitizeInventoryItems(inventory, isAdmin),
     categories: listCategories(),
