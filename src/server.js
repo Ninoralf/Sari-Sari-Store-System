@@ -38,6 +38,8 @@ import {
   listDigitalServiceRequests,
   getUserById,
   initializeDatabase,
+  importInventoryProducts,
+  previewInventoryImport,
   listCategories,
   listEloadNetworks,
   listUsers,
@@ -64,6 +66,7 @@ import {
 } from "./db.js";
 import { SQLiteSessionStore } from "./sqlite-session-store.js";
 import { formatProductName } from "./product-name.js";
+import { parseInventoryCsv } from "./inventory-csv.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -111,7 +114,7 @@ app.disable("x-powered-by");
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "..", "views"));
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 app.use(express.static(path.join(__dirname, "..", "public")));
 const sessionStore = new SQLiteSessionStore({ defaultTtlMs: sessionMaxAgeMs });
 app.use(session({
@@ -883,6 +886,7 @@ app.get("/settings", requireAuth, (req, res) => {
     categories: isAdmin ? listCategories() : [],
     suppliers: isAdmin ? listSuppliers() : [],
     eloadNetworks: isAdmin ? listEloadNetworks() : [],
+    productImportPreview: isAdmin ? req.session.productImportPreview || null : null,
     activeTab: forcePasswordChange ? "profile" : activeTab,
     forcePasswordChange
   });
@@ -1154,6 +1158,48 @@ app.get("/settings/export/inventory.csv", requireAuth, requireAdmin, (req, res) 
   res.setHeader("Content-Type", "text/csv");
   res.setHeader("Content-Disposition", 'attachment; filename="inventory.csv"');
   res.send(exportInventoryCsv());
+});
+
+app.post("/settings/import/products/preview", requireAuth, requireAdmin, (req, res) => {
+  const parsed = parseInventoryCsv(req.body.csvContent);
+  const preview = {
+    duplicateHandling: req.body.duplicateHandling === "update" ? "update" : "skip",
+    total: parsed.rows.length,
+    newProducts: 0,
+    existingProducts: 0,
+    errors: parsed.errors,
+    products: []
+  };
+
+  if (!preview.errors.length) {
+    const importPreview = previewInventoryImport(parsed.rows);
+    preview.total = importPreview.total;
+    preview.newProducts = importPreview.newProducts;
+    preview.existingProducts = importPreview.existingProducts;
+    preview.errors = importPreview.errors;
+    preview.products = importPreview.products;
+  }
+
+  req.session.productImportPreview = preview;
+  res.redirect("/settings?tab=data");
+});
+
+app.post("/settings/import/products", requireAuth, requireAdmin, (req, res) => {
+  const preview = req.session.productImportPreview;
+  if (!preview || preview.errors?.length || !preview.products?.length) {
+    setFlash(req, "danger", "Preview a valid product CSV before importing.");
+    return res.redirect("/settings?tab=data");
+  }
+
+  try {
+    const duplicateHandling = req.body.duplicateHandling === "update" ? "update" : "skip";
+    const summary = importInventoryProducts(preview.products, duplicateHandling);
+    delete req.session.productImportPreview;
+    setFlash(req, "success", `Import complete: ${summary.created} new, ${summary.updated} updated, ${summary.skipped} skipped.`);
+  } catch (error) {
+    setFlash(req, "danger", `Import failed: ${error.message}`);
+  }
+  return res.redirect("/settings?tab=data");
 });
 
 app.get("/settings/export/sales.csv", requireAuth, requireAdmin, (req, res) => {

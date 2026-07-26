@@ -17,9 +17,29 @@
 
           <div class="input-group input-group-lg">
             <span class="input-group-text bg-transparent"><i class="bi bi-upc-scan"></i></span>
-            <input class="form-control" id="quickPosBarcodeInput" placeholder="Enter barcode, then press Enter" autocomplete="off" autofocus>
+            <input class="form-control" id="quickPosBarcodeInput" placeholder="Enter barcode, then press Enter" autocomplete="off">
           </div>
           <div class="mini-note mt-2">The product will be added to the current cart on the Sales page.</div>
+
+          <div class="content-card mt-4 p-4 text-start" id="quickPosProductPanel" hidden aria-live="polite">
+            <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+              <div>
+                <div class="mini-note text-uppercase fw-bold text-success">Product found</div>
+                <div class="fw-bold fs-3" id="quickPosProductName"></div>
+                <div class="mini-note" id="quickPosProductVariant" hidden></div>
+              </div>
+              <span class="badge" id="quickPosProductStatus"></span>
+            </div>
+            <div class="text-success fw-bold display-5 mb-3" id="quickPosProductPrice"></div>
+            <div class="row g-2 mini-note">
+              <div class="col-sm-6"><strong>Barcode:</strong> <span id="quickPosProductBarcode"></span></div>
+              <div class="col-sm-6"><strong>Category:</strong> <span id="quickPosProductCategory"></span></div>
+            </div>
+            <div class="d-flex justify-content-end gap-2 mt-4">
+              <button class="btn btn-outline-secondary" type="button" id="quickPosCancelProductButton">Cancel</button>
+              <button class="btn btn-success" type="button" id="quickPosAddProductButton">Add to Cart</button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -34,7 +54,39 @@
 <script>
   const barcodeInput = document.getElementById("quickPosBarcodeInput");
   const scanButton = document.getElementById("quickPosScanButton");
+  const productPanel = document.getElementById("quickPosProductPanel");
+  const productName = document.getElementById("quickPosProductName");
+  const productVariant = document.getElementById("quickPosProductVariant");
+  const productPrice = document.getElementById("quickPosProductPrice");
+  const productBarcode = document.getElementById("quickPosProductBarcode");
+  const productCategory = document.getElementById("quickPosProductCategory");
+  const productStatus = document.getElementById("quickPosProductStatus");
+  const cancelProductButton = document.getElementById("quickPosCancelProductButton");
+  const addProductButton = document.getElementById("quickPosAddProductButton");
+  const scannerModalElement = document.getElementById("quickPosBarcodeScannerModal");
+  const cartToggleButton = document.getElementById("globalCartToggleButton");
   const barcodeScanner = new BarcodeScanner({ modalId: "quickPosBarcodeScannerModal" });
+  const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
+  let selectedProduct = null;
+  let cartToggleWasHidden = false;
+  let cartToggleWasDisabled = false;
+
+  function hideCartToggleForScanner() {
+    if (!cartToggleButton) return;
+    cartToggleWasHidden = cartToggleButton.hidden;
+    cartToggleWasDisabled = cartToggleButton.disabled;
+    cartToggleButton.hidden = true;
+    cartToggleButton.disabled = true;
+  }
+
+  function restoreCartToggleAfterScanner() {
+    if (!cartToggleButton) return;
+    cartToggleButton.hidden = cartToggleWasHidden;
+    cartToggleButton.disabled = cartToggleWasDisabled;
+  }
+
+  scannerModalElement?.addEventListener("show.bs.modal", hideCartToggleForScanner);
+  scannerModalElement?.addEventListener("hidden.bs.modal", restoreCartToggleAfterScanner);
 
   function openSalesWithBarcode(value) {
     const barcode = String(value || "").trim();
@@ -42,17 +94,57 @@
     window.location.href = `/sales?barcode=${encodeURIComponent(barcode)}`;
   }
 
+  function hideProductPanel() {
+    selectedProduct = null;
+    productPanel.hidden = true;
+    barcodeInput.value = "";
+    barcodeInput.focus();
+  }
+
+  function showProductPanel(product) {
+    selectedProduct = product;
+    productName.textContent = product.displayName || product.name;
+    productVariant.textContent = product.displayVariant || "";
+    productVariant.hidden = !product.displayVariant;
+    productPrice.textContent = peso.format(product.selling_price);
+    productBarcode.textContent = product.barcode;
+    productCategory.textContent = product.category;
+    productStatus.textContent = product.status;
+    productStatus.className = `badge ${product.status === "Out of Stock" ? "text-bg-danger" : product.status === "Low Stock" ? "text-bg-warning" : "text-bg-success"}`;
+    productPanel.hidden = false;
+  }
+
+  async function previewProduct(value) {
+    const barcode = String(value || "").trim();
+    if (!barcode) return;
+
+    const response = await fetch(`/api/inventory/barcode/${encodeURIComponent(barcode)}`, {
+      headers: { Accept: "application/json" }
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Unable to find product.");
+    showProductPanel(payload.item);
+  }
+
   scanButton.addEventListener("click", () => {
     barcodeScanner.open({
       title: "Scan Product Barcode",
-      onScan: openSalesWithBarcode
+      onScan: (barcode) => {
+        barcodeInput.value = barcode;
+        previewProduct(barcode).catch((error) => window.alert(error.message));
+      }
     });
   });
 
   barcodeInput.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
     event.preventDefault();
-    openSalesWithBarcode(barcodeInput.value);
+    previewProduct(barcodeInput.value).catch((error) => window.alert(error.message));
+  });
+
+  cancelProductButton.addEventListener("click", hideProductPanel);
+  addProductButton.addEventListener("click", () => {
+    if (selectedProduct) openSalesWithBarcode(selectedProduct.barcode);
   });
 </script>
 </body>

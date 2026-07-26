@@ -141,6 +141,43 @@ async function main() {
   if (!inventoryCsv.ok) {
     throw new Error(`/settings/export/inventory.csv returned ${inventoryCsv.status}.`);
   }
+  const inventoryCsvText = await inventoryCsv.text();
+  const [headerLine, firstProductLine] = inventoryCsvText.trim().split(/\r?\n/);
+  if (!headerLine.startsWith("Barcode,Name,Category,") || !firstProductLine) {
+    throw new Error("Inventory CSV export is not import-ready.");
+  }
+  const sampleCategory = firstProductLine.split(",")[2];
+  const importBarcode = `SMOKE-IMPORT-${crypto.randomUUID()}`;
+  const importCsv = [
+    headerLine,
+    `${importBarcode},Smoke Import Product,${sampleCategory},,0,1,2,0,In Stock`
+  ].join("\n");
+  const settingsPage = await request("/settings?tab=data");
+  const authenticatedCsrfToken = extractCsrfToken(await settingsPage.text());
+  const previewResponse = await request("/settings/import/products/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      _csrf: authenticatedCsrfToken,
+      csvContent: importCsv,
+      duplicateHandling: "skip"
+    }).toString()
+  });
+  if (previewResponse.status !== 302 || previewResponse.headers.get("location") !== "/settings?tab=data") {
+    throw new Error(`Product import preview did not return to Settings Data: ${previewResponse.status} -> ${previewResponse.headers.get("location") || "(missing)"}.`);
+  }
+  const importResponse = await request("/settings/import/products", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ _csrf: authenticatedCsrfToken, duplicateHandling: "skip" }).toString()
+  });
+  if (importResponse.status !== 302 || importResponse.headers.get("location") !== "/settings?tab=data") {
+    throw new Error("Product import did not return to Settings Data.");
+  }
+  const importedProduct = await request(`/api/inventory/barcode/${encodeURIComponent(importBarcode)}`);
+  if (!importedProduct.ok) {
+    throw new Error("Imported product could not be found by barcode.");
+  }
 
   const salesCsv = await request("/settings/export/sales.csv");
   if (!salesCsv.ok) {

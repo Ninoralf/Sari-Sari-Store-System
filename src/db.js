@@ -1379,6 +1379,101 @@ export function updateNotifications(input) {
     .run(input.lowStockAlert ? 1 : 0, input.outOfStockAlert ? 1 : 0, input.dailySalesAlert ? 1 : 0, input.weeklySalesAlert ? 1 : 0);
 }
 
+function validateInventoryProduct(input, existingId = null) {
+  const barcode = normalizeBarcode(input.barcode);
+  if (!barcode) throw new Error("Barcode is required.");
+  if (db.prepare("SELECT 1 FROM inventory_items WHERE barcode = ? AND id != ?").get(barcode, existingId || 0)) {
+    throw new Error("Barcode already exists.");
+  }
+
+  const name = String(input.name || "").trim();
+  if (!name) throw new Error("Product name is required.");
+  const category = String(input.category || "").trim();
+  if (!category) throw new Error("Category is required.");
+  if (!db.prepare("SELECT 1 FROM categories WHERE category_name = ?").get(category)) {
+    throw new Error("Choose a valid category from Settings.");
+  }
+
+  const unitPrice = Number(input.unitPrice);
+  const sellingPrice = Number(input.sellingPrice);
+  const stockQuantity = input.stockQuantity === "" || input.stockQuantity === undefined ? 0 : Number(input.stockQuantity);
+  const reorderLevel = input.reorderLevel === "" || input.reorderLevel === undefined ? 0 : Number(input.reorderLevel);
+  if (!Number.isFinite(unitPrice) || unitPrice < 0 || !Number.isFinite(sellingPrice) || sellingPrice < 0) {
+    throw new Error("Unit Price and Selling Price must be valid non-negative numbers.");
+  }
+  if (!Number.isInteger(stockQuantity) || stockQuantity < 0 || !Number.isInteger(reorderLevel) || reorderLevel < 0) {
+    throw new Error("Stock Quantity and Reorder Level must be non-negative whole numbers.");
+  }
+
+  const status = String(input.status || "").trim();
+  const normalizedStatus = status.toLowerCase();
+  if (status && !["in stock", "low stock", "low-stock", "out of stock", "out-of-stock"].includes(normalizedStatus)) {
+    throw new Error("Status must be In Stock, Low Stock, or Out of Stock.");
+  }
+
+  return {
+    barcode,
+    name,
+    category,
+    supplier: String(input.supplier || "").trim(),
+    status: normalizeItemStatus(status),
+    stockQuantity,
+    unitPrice,
+    sellingPrice,
+    reorderLevel
+  };
+}
+
+export function previewInventoryImport(rows) {
+  const products = [];
+  const errors = [];
+  const importBarcodes = new Set();
+
+  for (const row of rows) {
+    const existing = row.barcode
+      ? db.prepare("SELECT id, barcode FROM inventory_items WHERE barcode = ?").get(normalizeBarcode(row.barcode))
+      : db.prepare("SELECT id, barcode FROM inventory_items WHERE LOWER(name) = LOWER(?)").get(String(row.name || "").trim());
+    try {
+      const product = validateInventoryProduct({ ...row, barcode: row.barcode || existing?.barcode }, existing?.id || null);
+      if (importBarcodes.has(product.barcode)) throw new Error("Barcode is duplicated in this CSV.");
+      importBarcodes.add(product.barcode);
+      products.push({ ...product, existingId: existing?.id || null });
+    } catch (error) {
+      errors.push(`Row ${row.rowNumber}: ${error.message}`);
+    }
+  }
+
+  return {
+    products,
+    errors,
+    total: rows.length,
+    newProducts: products.filter((product) => !product.existingId).length,
+    existingProducts: products.filter((product) => product.existingId).length
+  };
+}
+
+export function importInventoryProducts(products, duplicateHandling = "skip") {
+  const insertProduct = db.prepare(`INSERT INTO inventory_items (barcode, name, category, supplier, status, stock_quantity, unit_price, selling_price, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  const updateProduct = db.prepare(`UPDATE inventory_items SET barcode = ?, name = ?, category = ?, supplier = ?, status = ?, stock_quantity = ?, unit_price = ?, selling_price = ?, reorder_level = ? WHERE id = ?`);
+  const importTransaction = withTransaction((entries) => {
+    const summary = { created: 0, updated: 0, skipped: 0 };
+    for (const entry of entries) {
+      const existing = db.prepare("SELECT id FROM inventory_items WHERE barcode = ?").get(entry.barcode);
+      if (existing) {
+        if (duplicateHandling === "update") {
+          updateProduct.run(entry.barcode, entry.name, entry.category, entry.supplier, entry.status, entry.stockQuantity, entry.unitPrice, entry.sellingPrice, entry.reorderLevel, existing.id);
+          summary.updated += 1;
+        } else summary.skipped += 1;
+      } else {
+        insertProduct.run(entry.barcode, entry.name, entry.category, entry.supplier, entry.status, entry.stockQuantity, entry.unitPrice, entry.sellingPrice, entry.reorderLevel);
+        summary.created += 1;
+      }
+    }
+    return summary;
+  });
+  return importTransaction(products);
+}
+
 export function listInventory(search = "", status = "all") {
   const pattern = `%${search.trim()}%`;
   const items = db.prepare(`
@@ -1410,37 +1505,15 @@ export function getInventorySummary() {
 }
 
 export function addInventoryItem(input) {
-  const barcode = normalizeBarcode(input.barcode);
-  if (!barcode) throw new Error("Barcode is required.");
-  if (db.prepare("SELECT 1 FROM inventory_items WHERE barcode = ?").get(barcode)) {
-    throw new Error("Barcode already exists.");
-  }
-
-  const category = String(input.category || "").trim();
-  if (!category) throw new Error("Category is required.");
-  if (!db.prepare("SELECT 1 FROM categories WHERE category_name = ?").get(category)) {
-    throw new Error("Choose a valid category from Settings.");
-  }
-
+  const product = validateInventoryProduct(input);
   db.prepare(`INSERT INTO inventory_items (barcode, name, category, supplier, status, stock_quantity, unit_price, selling_price, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(barcode, input.name, category, String(input.supplier || "").trim(), normalizeItemStatus(input.status), 0, Number(input.unitPrice), Number(input.sellingPrice), 0);
+    .run(product.barcode, product.name, product.category, product.supplier, product.status, product.stockQuantity, product.unitPrice, product.sellingPrice, product.reorderLevel);
 }
 
 export function updateInventoryItem(id, input) {
-  const barcode = normalizeBarcode(input.barcode);
-  if (!barcode) throw new Error("Barcode is required.");
-  if (db.prepare("SELECT 1 FROM inventory_items WHERE barcode = ? AND id != ?").get(barcode, id)) {
-    throw new Error("Barcode already exists.");
-  }
-
-  const category = String(input.category || "").trim();
-  if (!category) throw new Error("Category is required.");
-  if (!db.prepare("SELECT 1 FROM categories WHERE category_name = ?").get(category)) {
-    throw new Error("Choose a valid category from Settings.");
-  }
-
+  const product = validateInventoryProduct(input, id);
   db.prepare(`UPDATE inventory_items SET barcode = ?, name = ?, category = ?, supplier = ?, status = ?, stock_quantity = ?, unit_price = ?, selling_price = ?, reorder_level = ? WHERE id = ?`)
-    .run(barcode, input.name, category, String(input.supplier || "").trim(), normalizeItemStatus(input.status), 0, Number(input.unitPrice), Number(input.sellingPrice), 0, id);
+    .run(product.barcode, product.name, product.category, product.supplier, product.status, product.stockQuantity, product.unitPrice, product.sellingPrice, product.reorderLevel, id);
 }
 
 export function updateInventoryItemStatus(id, status) {
@@ -1882,8 +1955,8 @@ function csvEscape(value) {
 
 export function exportInventoryCsv() {
   const items = listInventory("");
-  const headers = ["Name", "Category", "Unit Price", "Selling Price", "Profit", "Status"];
-  const rows = items.map((item) => [item.name, item.category, item.unit_price, item.selling_price, item.profit, item.status]);
+  const headers = ["Barcode", "Name", "Category", "Supplier", "Stock Quantity", "Unit Price", "Selling Price", "Reorder Level", "Status"];
+  const rows = items.map((item) => [item.barcode, item.name, item.category, item.supplier, item.stock_quantity, item.unit_price, item.selling_price, item.reorder_level, item.status]);
   return [headers, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
 }
 

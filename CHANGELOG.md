@@ -2,7 +2,21 @@
 
 All notable changes to the Sari-Sari Store Management System are documented here.
 
-This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.8.0`.
+This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.8.1`.
+
+## [1.9.0] - 2026-07-26
+
+### What's New
+- Added Admin inventory CSV import with a validation preview, all-or-nothing import, and options to skip or update products that use existing barcodes.
+- Inventory CSV exports now include barcode, supplier, stock quantity, and reorder level, so exported files can be imported again.
+- Quick POS now shows a product information panel after a successful scan or manual barcode lookup, including the product name, selling price, variant, barcode, category, and stock status.
+
+### Changed
+- Quick POS keeps the existing Sales cart workflow while allowing the cashier to review a product and either cancel or add it to the cart.
+- Quick POS no longer focuses the barcode field or starts a lookup when the dashboard first loads.
+
+### Fixed
+- The floating cart action is hidden and disabled for the duration of the Quick POS camera scanner modal, then restored when the modal closes.
 
 ## [1.8.0] - 2026-07-26
 
