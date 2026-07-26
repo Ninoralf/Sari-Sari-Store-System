@@ -1,9 +1,9 @@
 {
-  "version": "1.8.1",
+  "version": "1.9.1",
   "changes": [
-    "Added inventory CSV import with validation preview, duplicate handling, and import-ready CSV exports.",
-    "Quick POS now previews scanned or manually entered products with price, variant, barcode, category, stock status, and cart actions.",
-    "Quick POS opens without automatically focusing or searching the barcode field.",
-    "The floating cart button is hidden while the Quick POS camera scanner is open."
+    "Removed automatic demo seeding for inventory, suppliers, categories, sales, and sale items during startup.",
+    "Fresh installs now initialize only required system records such as the admin account, roles, permissions, store settings, and e-load defaults.",
+    "Deleted inventory items are no longer recreated automatically on startup.",
+    "Startup no longer depends on sample products, which prevents seedSales-related crashes on empty production databases."
   ]
 }
