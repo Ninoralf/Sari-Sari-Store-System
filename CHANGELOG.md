@@ -2,7 +2,18 @@
 
 All notable changes to the Sari-Sari Store Management System are documented here.
 
-This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.8.1`.
+This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.9.1`.
+
+## [1.9.1] - 2026-07-26
+
+### Changed
+- Removed automatic startup seeding of sample inventory, suppliers, categories, sales, and sale items.
+- Fresh installations now initialize only required system records, including the admin account, roles, permissions, store settings, and default e-load settings.
+- Deleted inventory items are no longer recreated on every application startup.
+
+### Fixed
+- Removed the startup dependency on `seedSales`, preventing crashes when sample products are absent in production databases.
+- Updated smoke tests to create their own temporary fixture data instead of relying on demo records.
 
 ## [1.9.0] - 2026-07-26
 

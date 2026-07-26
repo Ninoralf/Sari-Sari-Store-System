@@ -4,7 +4,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
-import { seedInventoryItems, seedSales } from "./seedData.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -427,26 +426,6 @@ function legacyBarcodeForItem(item) {
   return `LEGACY-${item.id}`;
 }
 
-function seedBarcodeForItem(item, index) {
-  const source = `${item.name || "ITEM"}-${index + 1}`.toUpperCase();
-  const compact = source.replace(/[^A-Z0-9]/g, "").slice(0, 18) || `ITEM${index + 1}`;
-  return `SEED-${compact}`;
-}
-
-function buildUniqueSeedBarcode(item, usedBarcodes, index) {
-  const baseBarcode = seedBarcodeForItem(item, index);
-  let barcode = baseBarcode;
-  let suffix = 2;
-
-  while (usedBarcodes.has(barcode)) {
-    barcode = `${baseBarcode}-${suffix}`;
-    suffix += 1;
-  }
-
-  usedBarcodes.add(barcode);
-  return barcode;
-}
-
 function ensureInventoryBarcodeSchema() {
   const columns = db.prepare("PRAGMA table_info(inventory_items)").all();
   const columnNames = new Set(columns.map((column) => column.name));
@@ -610,44 +589,6 @@ function ensureReportingViews() {
     FROM digital_service_requests
     WHERE service_type = 'gcash';
   `);
-}
-
-function seedSuppliersFromInventory() {
-  const existingCount = db.prepare("SELECT COUNT(*) AS count FROM suppliers").get().count;
-  if (existingCount) return;
-
-  const names = [...new Set(
-    db.prepare("SELECT supplier FROM inventory_items WHERE TRIM(COALESCE(supplier, '')) <> '' ORDER BY supplier").all()
-      .map((row) => String(row.supplier || "").trim())
-      .filter(Boolean)
-  )];
-
-  if (!names.length) return;
-
-  const insertSupplier = db.prepare("INSERT INTO suppliers (supplier_name, contact_no, address) VALUES (?, '', '')");
-  const insertMany = withTransaction((supplierNames) => {
-    supplierNames.forEach((name) => insertSupplier.run(name));
-  });
-  insertMany(names);
-}
-
-function seedCategoriesFromInventory() {
-  const existingCount = db.prepare("SELECT COUNT(*) AS count FROM categories").get().count;
-  if (existingCount) return;
-
-  const names = [...new Set(
-    db.prepare("SELECT category FROM inventory_items WHERE TRIM(COALESCE(category, '')) <> '' ORDER BY category").all()
-      .map((row) => String(row.category || "").trim())
-      .filter(Boolean)
-  )];
-
-  if (!names.length) return;
-
-  const insertCategory = db.prepare("INSERT INTO categories (category_name) VALUES (?)");
-  const insertMany = withTransaction((categoryNames) => {
-    categoryNames.forEach((name) => insertCategory.run(name));
-  });
-  insertMany(names);
 }
 
 function seedEloadSettings() {
@@ -899,15 +840,6 @@ async function seedDefaults() {
       phone: "+63 912 345 6789",
       password: seededAdminPassword || "admin123",
       mustChangePassword: seededAdminPassword ? 0 : 1
-    },
-    {
-      username: "user",
-      fullName: "User Staff",
-      role: "User",
-      email: "user@sarisaristore.com",
-      phone: "+63 912 345 6790",
-      password: "user123",
-      mustChangePassword: 0
     }
   ];
 
@@ -935,51 +867,6 @@ async function seedDefaults() {
     `).run("Sari-Sari Store", "123 Barangay Street, City, Province", "+63 912 345 6789", "", "Monday - Sunday, 6:00 AM - 10:00 PM");
   }
 
-  if (!db.prepare("SELECT COUNT(*) AS count FROM inventory_items").get().count) {
-    const insertItem = db.prepare(`INSERT INTO inventory_items (barcode, name, category, supplier, stock_quantity, unit_price, selling_price, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
-    const usedBarcodes = new Set();
-    const insertMany = withTransaction((items) => {
-      for (const [index, item] of items.entries()) {
-        insertItem.run(buildUniqueSeedBarcode(item, usedBarcodes, index), item.name, item.category, item.supplier || "", item.stockQuantity, item.unitPrice, item.sellingPrice, item.reorderLevel);
-      }
-    });
-    insertMany(seedInventoryItems);
-  }
-
-  if (!db.prepare("SELECT COUNT(*) AS count FROM sales").get().count) {
-    for (const sale of seedSales) {
-      const items = sale.items.map((entry) => {
-        const inventoryItem = db.prepare("SELECT id, name FROM inventory_items WHERE name = ?").get(entry.itemName);
-        return { inventoryItemId: inventoryItem.id, itemName: inventoryItem.name, quantity: entry.quantity, price: entry.price, total: entry.quantity * entry.price };
-      });
-      createSale({ saleDate: sale.date, paymentMethod: sale.paymentMethod, items, skipStockValidation: true });
-    }
-  }
-}
-
-function seedMissingInventoryItems() {
-  const existingNames = new Set(
-    db.prepare("SELECT name FROM inventory_items").all()
-      .map((row) => String(row.name || "").trim().toLowerCase())
-  );
-  const usedBarcodes = new Set(
-    db.prepare("SELECT barcode FROM inventory_items WHERE TRIM(COALESCE(barcode, '')) <> ''").all()
-      .map((row) => normalizeBarcode(row.barcode))
-      .filter(Boolean)
-  );
-  const insertItem = db.prepare(`INSERT INTO inventory_items (barcode, name, category, supplier, stock_quantity, unit_price, selling_price, reorder_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
-  const missingItems = seedInventoryItems
-    .map((item, index) => ({ item, index }))
-    .filter(({ item }) => !existingNames.has(String(item.name || "").trim().toLowerCase()));
-  if (!missingItems.length) return;
-
-  const insertMany = withTransaction((items) => {
-    for (const { item, index } of items) {
-      const barcode = buildUniqueSeedBarcode(item, usedBarcodes, index);
-      insertItem.run(barcode, item.name, item.category, item.supplier || "", item.stockQuantity, item.unitPrice, item.sellingPrice, item.reorderLevel);
-    }
-  });
-  insertMany(missingItems);
 }
 
 export async function initializeDatabase() {
@@ -991,9 +878,6 @@ export async function initializeDatabase() {
   ensureAuthSecuritySchema();
   ensureReportingViews();
   await seedDefaults();
-  seedMissingInventoryItems();
-  seedSuppliersFromInventory();
-  seedCategoriesFromInventory();
   seedEloadSettings();
 }
 

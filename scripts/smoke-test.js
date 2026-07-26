@@ -142,18 +142,26 @@ async function main() {
     throw new Error(`/settings/export/inventory.csv returned ${inventoryCsv.status}.`);
   }
   const inventoryCsvText = await inventoryCsv.text();
-  const [headerLine, firstProductLine] = inventoryCsvText.trim().split(/\r?\n/);
-  if (!headerLine.startsWith("Barcode,Name,Category,") || !firstProductLine) {
+  const headerLine = inventoryCsvText.trim().split(/\r?\n/)[0];
+  if (!headerLine.startsWith("Barcode,Name,Category,")) {
     throw new Error("Inventory CSV export is not import-ready.");
   }
-  const sampleCategory = firstProductLine.split(",")[2];
+  const settingsPage = await request("/settings?tab=data");
+  const authenticatedCsrfToken = extractCsrfToken(await settingsPage.text());
+  const importCategory = `Smoke Category ${crypto.randomUUID()}`;
+  const categoryResponse = await request("/settings/categories/add", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ _csrf: authenticatedCsrfToken, categoryName: importCategory }).toString()
+  });
+  if (categoryResponse.status !== 302 || categoryResponse.headers.get("location") !== "/inventory") {
+    throw new Error("Smoke test category setup did not return to Inventory.");
+  }
   const importBarcode = `SMOKE-IMPORT-${crypto.randomUUID()}`;
   const importCsv = [
     headerLine,
-    `${importBarcode},Smoke Import Product,${sampleCategory},,0,1,2,0,In Stock`
+    `${importBarcode},Smoke Import Product,${importCategory},,0,1,2,0,In Stock`
   ].join("\n");
-  const settingsPage = await request("/settings?tab=data");
-  const authenticatedCsrfToken = extractCsrfToken(await settingsPage.text());
   const previewResponse = await request("/settings/import/products/preview", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
