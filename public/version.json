@@ -1,9 +1,8 @@
 {
-  "version": "1.10.0",
+  "version": "1.10.1",
   "changes": [
-    "Added barcode scanning to the Inventory search workflow for fast product price updates.",
-    "A scanned Inventory barcode now searches by barcode, opens the Edit Product dialog for a single exact match, and focuses the Selling Price field for immediate replacement.",
-    "Inventory barcode scans keep filtered results visible when multiple products match and reuse the existing Product not found notification when no match exists.",
-    "After saving a scanned product, Inventory returns to barcode scanning mode so consecutive price updates stay fast."
+    "Optimized the Inventory table for mobile and tablet screens without changing the desktop layout.",
+    "Mobile Inventory now combines stock status into the Price column below the selling price and cost.",
+    "Mobile Inventory action buttons are stacked vertically and column alignment, widths, and padding were tuned to avoid horizontal scrolling and clipped controls."
   ]
 }
