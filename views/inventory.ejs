@@ -74,7 +74,10 @@
           <div class="col-md-7">
             <div class="input-group shadow-sm rounded-3 overflow-hidden border">
               <span class="input-group-text border-0 bg-white"><i class="bi bi-search text-muted"></i></span>
-              <input class="form-control border-0" id="inventoryLiveSearch" placeholder="Search by barcode, name, category, or supplier...">
+              <input class="form-control border-0" id="inventoryLiveSearch" placeholder="Search by barcode, name, category, or supplier..." autocomplete="off">
+              <button type="button" class="btn btn-outline-primary border-0 px-3 barcode-scan-btn" id="inventoryBarcodeScanButton" title="Scan Barcode">
+                <i class="bi bi-upc-scan me-1"></i><span class="d-none d-sm-inline">Scan</span>
+              </button>
             </div>
           </div>
           <div class="col-md-5">
@@ -87,6 +90,10 @@
           </div>
         </div>
         <div class="mini-note d-none mb-4" id="inventoryFilterSummary"></div>
+        <div class="alert alert-warning alert-dismissible fade show d-none mb-4" id="inventoryScanAlert" role="alert">
+          <span id="inventoryScanAlertMessage"></span>
+          <button type="button" class="btn-close" aria-label="Close"></button>
+        </div>
 
         <div class="table-responsive">
           <table class="table align-middle table-hover">
@@ -535,11 +542,15 @@
   const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
   const csrfToken = "<%= csrfToken %>";
   const canManageInventory = <%= user && user.role === "Admin" ? "true" : "false" %>;
+  const inventoryPageStateKey = "inventory-barcode-scan-resume";
   const inventorySearch = document.getElementById("inventoryLiveSearch");
   const inventoryStatus = document.getElementById("inventoryStatusFilter");
   const inventoryTableBody = document.getElementById("inventoryTableBody");
   const inventorySummary = document.getElementById("inventoryFilterSummary");
   const inventoryPrintButton = document.getElementById("inventoryPrintButton");
+  const inventoryBarcodeScanButton = document.getElementById("inventoryBarcodeScanButton");
+  const inventoryScanAlert = document.getElementById("inventoryScanAlert");
+  const inventoryScanAlertMessage = document.getElementById("inventoryScanAlertMessage");
   const inventorySummaryTotal = document.getElementById("inventorySummaryTotal");
   const inventorySummaryInStock = document.getElementById("inventorySummaryInStock");
   const inventorySummaryLowStock = document.getElementById("inventorySummaryLowStock");
@@ -554,6 +565,33 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
+  }
+
+  function normalizeBarcode(value) {
+    return String(value ?? "").trim();
+  }
+
+  function showInventoryAlert(message) {
+    if (!inventoryScanAlert || !inventoryScanAlertMessage) return;
+    inventoryScanAlertMessage.textContent = message;
+    inventoryScanAlert.classList.remove("d-none");
+  }
+
+  function hideInventoryAlert() {
+    if (!inventoryScanAlert || !inventoryScanAlertMessage) return;
+    inventoryScanAlert.classList.add("d-none");
+    inventoryScanAlertMessage.textContent = "";
+  }
+
+  function focusSellingPriceInput(modalElement) {
+    const sellingPriceInput = modalElement?.querySelector('input[name="sellingPrice"]');
+    if (!sellingPriceInput) return;
+    sellingPriceInput.focus();
+    if (typeof sellingPriceInput.select === "function") {
+      sellingPriceInput.select();
+    } else if (typeof sellingPriceInput.setSelectionRange === "function") {
+      sellingPriceInput.setSelectionRange(0, String(sellingPriceInput.value || "").length);
+    }
   }
 
   function renderInventoryRows(items) {
@@ -618,32 +656,87 @@
     inventorySummaryOutOfStock.textContent = String(summary.outOfStock);
   }
 
-  async function loadInventoryResults() {
-    if (!inventorySearch || !inventoryStatus || !inventoryTableBody) return;
+  async function fetchInventoryResults(search, status) {
     inventoryFetchController?.abort();
     inventoryFetchController = new AbortController();
     const params = new URLSearchParams({
-      search: inventorySearch.value.trim(),
-      status: inventoryStatus.value
+      search: String(search || "").trim(),
+      status: status || "all"
     });
 
+    const response = await fetch(`/api/inventory?${params.toString()}`, {
+      headers: { Accept: "application/json" },
+      signal: inventoryFetchController.signal
+    });
+    if (!response.ok) throw new Error("Failed to load inventory.");
+    return response.json();
+  }
+
+  function syncInventoryUrl(search, status) {
+    const url = new URL(window.location.href);
+    if (search) url.searchParams.set("search", search); else url.searchParams.delete("search");
+    if (status && status !== "all") url.searchParams.set("status", status); else url.searchParams.delete("status");
+    window.history.replaceState({}, "", url);
+  }
+
+  async function applyInventoryResults(payload, { syncUrl = true } = {}) {
+    renderInventoryRows(payload.items);
+    updateInventoryCards(payload.summary);
+    updateInventorySummary(payload.count);
+    if (syncUrl) syncInventoryUrl(payload.search, payload.status);
+    return payload;
+  }
+
+  async function loadInventoryResults() {
+    if (!inventorySearch || !inventoryStatus || !inventoryTableBody) return;
     try {
-      const response = await fetch(`/api/inventory?${params.toString()}`, {
-        headers: { Accept: "application/json" },
-        signal: inventoryFetchController.signal
-      });
-      if (!response.ok) throw new Error("Failed to load inventory.");
-      const payload = await response.json();
-      renderInventoryRows(payload.items);
-      updateInventoryCards(payload.summary);
-      updateInventorySummary(payload.count);
-      const url = new URL(window.location.href);
-      if (payload.search) url.searchParams.set("search", payload.search); else url.searchParams.delete("search");
-      if (payload.status && payload.status !== "all") url.searchParams.set("status", payload.status); else url.searchParams.delete("status");
-      window.history.replaceState({}, "", url);
+      hideInventoryAlert();
+      const payload = await fetchInventoryResults(inventorySearch.value, inventoryStatus.value);
+      await applyInventoryResults(payload);
     } catch (error) {
       if (error.name !== "AbortError") console.error(error);
     }
+  }
+
+  async function openInventoryEditModal(item, barcode) {
+    if (!item || !canManageInventory) return;
+    const modalElement = document.getElementById(`editItemModal-${item.id}`);
+    if (!modalElement) return;
+    modalElement.dataset.inventoryScanOpened = "true";
+    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+    modal.show();
+  }
+
+  async function handleInventoryBarcodeScan(barcode) {
+    const normalizedBarcode = normalizeBarcode(barcode);
+    if (!normalizedBarcode) return;
+    if (!inventorySearch || !inventoryStatus) return;
+
+    inventorySearch.value = normalizedBarcode;
+    hideInventoryAlert();
+
+    try {
+      const payload = await fetchInventoryResults(normalizedBarcode, inventoryStatus.value);
+      await applyInventoryResults(payload);
+      const exactMatches = payload.items.filter((item) => normalizeBarcode(item.barcode) === normalizedBarcode);
+      if (!payload.items.length || !exactMatches.length) {
+        showInventoryAlert("Product not found.");
+        return;
+      }
+
+      if (payload.items.length === 1 && exactMatches.length === 1) {
+        await openInventoryEditModal(exactMatches[0], normalizedBarcode);
+      }
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        console.error(error);
+        showInventoryAlert("Product not found.");
+      }
+    }
+  }
+
+  if (inventoryScanAlert) {
+    inventoryScanAlert.querySelector(".btn-close")?.addEventListener("click", hideInventoryAlert);
   }
 
   if (inventorySearch) inventorySearch.addEventListener("input", () => {
@@ -668,11 +761,38 @@
     bootstrap.Tooltip.getOrCreateInstance(element);
   });
   const inventoryBarcodeScanner = new BarcodeScanner({ modalId: "barcodeScannerModal" });
+  inventoryBarcodeScanButton?.addEventListener("click", () => {
+    inventoryBarcodeScanner.open({
+      title: "Scan Inventory Barcode",
+      onScan: (barcode) => {
+        handleInventoryBarcodeScan(barcode);
+      }
+    });
+  });
+
+  document.querySelectorAll('div[id^="editItemModal-"]').forEach((modalElement) => {
+    modalElement.addEventListener("shown.bs.modal", () => {
+      if (modalElement.dataset.inventoryScanOpened === "true") {
+        focusSellingPriceInput(modalElement);
+      }
+    });
+    modalElement.addEventListener("hidden.bs.modal", () => {
+      delete modalElement.dataset.inventoryScanOpened;
+    });
+    const form = modalElement.querySelector("form");
+    form?.addEventListener("submit", () => {
+      if (modalElement.dataset.inventoryScanOpened === "true") {
+        window.sessionStorage.setItem(inventoryPageStateKey, "1");
+      }
+    });
+  });
+
   document.addEventListener("click", (event) => {
     const scanButton = event.target.closest(".barcode-scan-btn");
     const clearButton = event.target.closest(".barcode-clear-btn");
 
     if (scanButton) {
+      if (scanButton.id === "inventoryBarcodeScanButton") return;
       const input = document.getElementById(scanButton.dataset.barcodeTarget);
       if (!input) return;
       inventoryBarcodeScanner.open({
@@ -694,6 +814,18 @@
       input.focus();
     }
   });
+
+  if (window.sessionStorage.getItem(inventoryPageStateKey) === "1" && inventoryBarcodeScanner.ready) {
+    window.sessionStorage.removeItem(inventoryPageStateKey);
+    window.setTimeout(() => {
+      inventoryBarcodeScanner.open({
+        title: "Scan Inventory Barcode",
+        onScan: (barcode) => {
+          handleInventoryBarcodeScan(barcode);
+        }
+      });
+    }, 250);
+  }
 
   if (inventorySearch && inventoryStatus && inventoryTableBody) loadInventoryResults();
 </script>
