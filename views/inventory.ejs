@@ -3,7 +3,7 @@
   <%- include("partials/sidebar") %>
   <main class="flex-grow-1">
     <%- include("partials/topbar") %>
-    <section class="p-3 p-lg-4">
+    <section class="p-3 p-lg-4 inventory-page">
       <%- include("partials/flash") %>
       
       <!-- Inventory Header & Metrics -->
@@ -95,15 +95,15 @@
           <button type="button" class="btn-close" aria-label="Close"></button>
         </div>
 
-        <div class="table-responsive">
-          <table class="table align-middle table-hover">
+        <div class="table-responsive inventory-page-table-wrap">
+          <table class="table align-middle table-hover inventory-page-table">
             <thead class="bg-light">
               <tr>
                 <th class="border-0 rounded-start ps-3">Item Details</th>
                 <th class="border-0 text-end">Price</th>
                 <th class="border-0">Status</th>
                 <% if (user && user.role === "Admin") { %>
-                  <th class="border-0 text-end rounded-end pe-3">Actions</th>
+                  <th class="border-0 text-end rounded-end pe-3">Action</th>
                 <% } else { %>
                   <th class="border-0 rounded-end"></th>
                 <% } %>
@@ -123,6 +123,11 @@
                     <% if (user && user.role === "Admin") { %>
                       <div class="mini-note text-muted">Cost: <%= formatCurrency(item.unit_price) %></div>
                     <% } %>
+                    <div class="inventory-mobile-price-status">
+                      <% if (item.status === "In Stock") { %><span class="badge rounded-pill bg-success-subtle text-success px-3">IN STOCK</span>
+                      <% } else if (item.status === "Low Stock") { %><span class="badge rounded-pill bg-warning-subtle text-warning px-3">LOW STOCK</span>
+                      <% } else { %><span class="badge rounded-pill bg-danger-subtle text-danger px-3">OUT OF STOCK</span><% } %>
+                    </div>
                   </td>
                   <td>
                     <% if (item.status === "In Stock") { %>
@@ -612,6 +617,7 @@
         <td class="text-end">
           <div class="fw-bold text-success">${peso.format(item.selling_price)}</div>
           ${canManageInventory ? `<div class="mini-note text-muted">Cost: ${peso.format(item.unit_price)}</div>` : ""}
+          <div class="inventory-mobile-price-status">${item.status === "In Stock" ? '<span class="badge rounded-pill bg-success-subtle text-success px-3">IN STOCK</span>' : item.status === "Low Stock" ? '<span class="badge rounded-pill bg-warning-subtle text-warning px-3">LOW STOCK</span>' : '<span class="badge rounded-pill bg-danger-subtle text-danger px-3">OUT OF STOCK</span>'}</div>
         </td>
         <td>
           ${item.status === "In Stock" ? '<span class="badge rounded-pill bg-success-subtle text-success px-3">IN STOCK</span>' : item.status === "Low Stock" ? '<span class="badge rounded-pill bg-warning-subtle text-warning px-3">LOW STOCK</span>' : '<span class="badge rounded-pill bg-danger-subtle text-danger px-3">OUT OF STOCK</span>'}

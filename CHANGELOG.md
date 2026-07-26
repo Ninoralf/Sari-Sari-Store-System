@@ -2,7 +2,18 @@
 
 All notable changes to the Sari-Sari Store Management System are documented here.
 
-This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.10.0`.
+This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.10.1`.
+
+## [1.11.0] - 2026-07-27
+
+### Changed
+- Optimized the Inventory table for tablet and mobile widths while preserving its existing table layout and desktop presentation.
+- On tablet and mobile, the stock status badge now appears below Cost in the Price column and the separate Status column is removed from view.
+- Tuned mobile Inventory column widths, horizontal padding, and header/content alignment so Item Details, Price, and Actions fit within the viewport.
+- Edit and Delete controls now stack vertically in the mobile Actions column and remain centered and fully visible.
+
+### Fixed
+- Removed horizontal scrolling and clipped Inventory table controls on common mobile screen widths.
 
 ## [1.10.0] - 2026-07-26
 

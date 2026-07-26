@@ -2346,4 +2346,107 @@ body[data-theme="Dark Mode"] .btn-white {
   }
 }
 
+/* On smaller screens, keep the existing table/card presentation and remove
+   only the redundant status column to prevent horizontal scrolling. */
+.inventory-mobile-price-status {
+  display: none;
+}
+
+@media (max-width: 991.98px) {
+  .inventory-page {
+    padding-left: 0.625rem !important;
+    padding-right: 0.625rem !important;
+  }
+
+  .inventory-page > .content-card {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  .inventory-page-table-wrap {
+    overflow-x: hidden;
+  }
+
+  .inventory-page-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .inventory-page-table th:nth-child(3),
+  .inventory-page-table td:nth-child(3) {
+    display: none;
+  }
+
+  .inventory-page-table th:nth-child(1),
+  .inventory-page-table td:nth-child(1) {
+    width: 45%;
+  }
+
+  .inventory-page-table th:nth-child(2),
+  .inventory-page-table td:nth-child(2) {
+    width: 35%;
+  }
+
+  .inventory-page-table th:nth-child(4),
+  .inventory-page-table td:nth-child(4) {
+    width: 20%;
+  }
+
+  .inventory-page-table th,
+  .inventory-page-table td {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+
+  .inventory-page-table th {
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
+  }
+
+  .inventory-page-table .fw-bold,
+  .inventory-page-table .mini-note {
+    overflow-wrap: anywhere;
+  }
+
+  .inventory-mobile-price-status {
+    display: block;
+    margin-top: 0.25rem;
+  }
+
+  .inventory-mobile-price-status .badge {
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
+  }
+
+  .inventory-page-table td:nth-child(2) {
+    vertical-align: top;
+    text-align: left !important;
+  }
+
+  .inventory-page-table th:nth-child(2) {
+    padding-left: 0.5rem !important;
+    text-align: left !important;
+  }
+
+  .inventory-page-table td:nth-child(4) {
+    vertical-align: middle;
+  }
+
+  .inventory-page-table th:nth-child(4) {
+    padding-left: 0.5rem !important;
+    text-align: left !important;
+  }
+
+  .inventory-page-table td:nth-child(4) {
+    text-align: center !important;
+  }
+
+  .inventory-page-table td:nth-child(4) > .d-flex {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center !important;
+  }
+}
+
 
