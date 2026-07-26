@@ -1,10 +1,9 @@
 {
-  "version": "1.8.0",
+  "version": "1.8.1",
   "changes": [
-    "Added a dedicated Quick POS Home for User accounts with barcode scanning and manual barcode entry.",
-    "Restricted dashboard analytics to Admin accounts while keeping User checkout workflows focused on POS.",
-    "Product names now display their final parenthesized variant separately without changing stored inventory data.",
-    "Improved the mobile cart with a compact total-first summary and a stable bottom-center cart button.",
-    "Change cart 'new customer' to 'clear'."
+    "Added inventory CSV import with validation preview, duplicate handling, and import-ready CSV exports.",
+    "Quick POS now previews scanned or manually entered products with price, variant, barcode, category, stock status, and cart actions.",
+    "Quick POS opens without automatically focusing or searching the barcode field.",
+    "The floating cart button is hidden while the Quick POS camera scanner is open."
   ]
 }
