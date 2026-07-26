@@ -1,9 +1,9 @@
 {
-  "version": "1.9.1",
+  "version": "1.10.0",
   "changes": [
-    "Removed automatic demo seeding for inventory, suppliers, categories, sales, and sale items during startup.",
-    "Fresh installs now initialize only required system records such as the admin account, roles, permissions, store settings, and e-load defaults.",
-    "Deleted inventory items are no longer recreated automatically on startup.",
-    "Startup no longer depends on sample products, which prevents seedSales-related crashes on empty production databases."
+    "Added barcode scanning to the Inventory search workflow for fast product price updates.",
+    "A scanned Inventory barcode now searches by barcode, opens the Edit Product dialog for a single exact match, and focuses the Selling Price field for immediate replacement.",
+    "Inventory barcode scans keep filtered results visible when multiple products match and reuse the existing Product not found notification when no match exists.",
+    "After saving a scanned product, Inventory returns to barcode scanning mode so consecutive price updates stay fast."
   ]
 }
