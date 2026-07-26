@@ -42,7 +42,7 @@
       <% if (items.length) { %>
         <% items.forEach((item) => { %>
           <tr>
-            <td><%= item.name %></td>
+            <td><%= item.displayName %><% if (item.displayVariant) { %><br><small><%= item.displayVariant %></small><% } %></td>
             <td><%= item.category %></td>
             <td><%= item.supplier || "N/A" %></td>
             <td><%= item.status %></td>

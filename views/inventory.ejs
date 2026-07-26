@@ -106,7 +106,8 @@
               <% items.forEach((item) => { %>
                 <tr class="inventory-row">
                   <td class="ps-3 py-3">
-                    <div class="fw-bold text-dark"><%= item.name %></div>
+                    <div class="fw-bold text-dark"><%= item.displayName %></div>
+                    <% if (item.displayVariant) { %><div class="mini-note text-muted"><%= item.displayVariant %></div><% } %>
                     <div class="mini-note text-muted"><%= item.category %> | <%= item.supplier || 'No Supplier' %></div>
                     <div class="mini-note text-muted">Barcode: <%= item.barcode %></div>
                   </td>
@@ -565,7 +566,8 @@
     inventoryTableBody.innerHTML = items.map((item) => `
       <tr class="inventory-row">
         <td class="ps-3 py-3">
-          <div class="fw-bold text-dark">${escapeHtml(item.name)}</div>
+          <div class="fw-bold text-dark">${escapeHtml(item.displayName || item.name)}</div>
+          ${item.displayVariant ? `<div class="mini-note text-muted">${escapeHtml(item.displayVariant)}</div>` : ""}
           <div class="mini-note text-muted">${escapeHtml(item.category)} | ${escapeHtml(item.supplier || "No Supplier")}</div>
           <div class="mini-note text-muted">Barcode: ${escapeHtml(item.barcode)}</div>
         </td>
