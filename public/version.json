@@ -1,6 +1,8 @@
 {
-  "version": "1.10.1",
+  "version": "1.11.1",
   "changes": [
+    "Inventory barcode scans now act as a search shortcut: matching products stay in the filtered results without opening the Edit Product dialog.",
+    "When a scanned barcode has no exact product match, Inventory now offers to register it and pre-fills only the Barcode field in the existing Add Item form.",
     "Optimized the Inventory table for mobile and tablet screens without changing the desktop layout.",
     "Mobile Inventory now combines stock status into the Price column below the selling price and cost.",
     "Mobile Inventory action buttons are stacked vertically and column alignment, widths, and padding were tuned to avoid horizontal scrolling and clipped controls."

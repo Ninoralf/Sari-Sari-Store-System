@@ -165,6 +165,24 @@
 </div>
 
 <% if (user && user.role === "Admin") { %>
+<div class="modal fade" id="inventoryRegisterProductModal" tabindex="-1" aria-labelledby="inventoryRegisterProductTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4 shadow-lg border-0">
+      <div class="modal-header border-0 pb-0">
+        <h2 class="modal-title h5" id="inventoryRegisterProductTitle">Product not found</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">No product matches the scanned barcode.<br><br>Would you like to register this product?</div>
+      <div class="modal-footer border-0 p-4 pt-0">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" id="inventoryRegisterProductButton">Register Product</button>
+      </div>
+    </div>
+  </div>
+</div>
+<% } %>
+
+<% if (user && user.role === "Admin") { %>
 <!-- CATEGORY MANAGEMENT MODAL -->
 <div class="modal fade" id="manageCategoriesModal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -547,7 +565,6 @@
   const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
   const csrfToken = "<%= csrfToken %>";
   const canManageInventory = <%= user && user.role === "Admin" ? "true" : "false" %>;
-  const inventoryPageStateKey = "inventory-barcode-scan-resume";
   const inventorySearch = document.getElementById("inventoryLiveSearch");
   const inventoryStatus = document.getElementById("inventoryStatusFilter");
   const inventoryTableBody = document.getElementById("inventoryTableBody");
@@ -560,8 +577,14 @@
   const inventorySummaryInStock = document.getElementById("inventorySummaryInStock");
   const inventorySummaryLowStock = document.getElementById("inventorySummaryLowStock");
   const inventorySummaryOutOfStock = document.getElementById("inventorySummaryOutOfStock");
+  const inventoryRegisterProductModal = document.getElementById("inventoryRegisterProductModal");
+  const inventoryRegisterProductButton = document.getElementById("inventoryRegisterProductButton");
+  const addItemModal = document.getElementById("addItemModal");
+  const addItemForm = addItemModal?.querySelector("form");
+  const addItemBarcode = document.getElementById("addItemBarcode");
   let inventoryFetchController;
   let inventorySearchTimer;
+  let pendingRegistrationBarcode = "";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -586,17 +609,6 @@
     if (!inventoryScanAlert || !inventoryScanAlertMessage) return;
     inventoryScanAlert.classList.add("d-none");
     inventoryScanAlertMessage.textContent = "";
-  }
-
-  function focusSellingPriceInput(modalElement) {
-    const sellingPriceInput = modalElement?.querySelector('input[name="sellingPrice"]');
-    if (!sellingPriceInput) return;
-    sellingPriceInput.focus();
-    if (typeof sellingPriceInput.select === "function") {
-      sellingPriceInput.select();
-    } else if (typeof sellingPriceInput.setSelectionRange === "function") {
-      sellingPriceInput.setSelectionRange(0, String(sellingPriceInput.value || "").length);
-    }
   }
 
   function renderInventoryRows(items) {
@@ -694,23 +706,16 @@
   }
 
   async function loadInventoryResults() {
-    if (!inventorySearch || !inventoryStatus || !inventoryTableBody) return;
+    if (!inventorySearch || !inventoryStatus || !inventoryTableBody) return null;
     try {
       hideInventoryAlert();
       const payload = await fetchInventoryResults(inventorySearch.value, inventoryStatus.value);
       await applyInventoryResults(payload);
+      return payload;
     } catch (error) {
       if (error.name !== "AbortError") console.error(error);
+      return null;
     }
-  }
-
-  async function openInventoryEditModal(item, barcode) {
-    if (!item || !canManageInventory) return;
-    const modalElement = document.getElementById(`editItemModal-${item.id}`);
-    if (!modalElement) return;
-    modalElement.dataset.inventoryScanOpened = "true";
-    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
-    modal.show();
   }
 
   async function handleInventoryBarcodeScan(barcode) {
@@ -720,23 +725,26 @@
 
     inventorySearch.value = normalizedBarcode;
     hideInventoryAlert();
+    window.clearTimeout(inventorySearchTimer);
+    inventorySearch.dispatchEvent(new Event("input", { bubbles: true }));
+    window.clearTimeout(inventorySearchTimer);
 
     try {
-      const payload = await fetchInventoryResults(normalizedBarcode, inventoryStatus.value);
-      await applyInventoryResults(payload);
+      const payload = await loadInventoryResults();
+      if (!payload) return;
       const exactMatches = payload.items.filter((item) => normalizeBarcode(item.barcode) === normalizedBarcode);
-      if (!payload.items.length || !exactMatches.length) {
-        showInventoryAlert("Product not found.");
-        return;
-      }
-
-      if (payload.items.length === 1 && exactMatches.length === 1) {
-        await openInventoryEditModal(exactMatches[0], normalizedBarcode);
+      if (!exactMatches.length) {
+        pendingRegistrationBarcode = normalizedBarcode;
+        if (inventoryRegisterProductModal) {
+          bootstrap.Modal.getOrCreateInstance(inventoryRegisterProductModal).show();
+        } else {
+          showInventoryAlert("Product not found.");
+        }
       }
     } catch (error) {
       if (error.name !== "AbortError") {
         console.error(error);
-        showInventoryAlert("Product not found.");
+        showInventoryAlert("Unable to search inventory.");
       }
     }
   }
@@ -776,23 +784,6 @@
     });
   });
 
-  document.querySelectorAll('div[id^="editItemModal-"]').forEach((modalElement) => {
-    modalElement.addEventListener("shown.bs.modal", () => {
-      if (modalElement.dataset.inventoryScanOpened === "true") {
-        focusSellingPriceInput(modalElement);
-      }
-    });
-    modalElement.addEventListener("hidden.bs.modal", () => {
-      delete modalElement.dataset.inventoryScanOpened;
-    });
-    const form = modalElement.querySelector("form");
-    form?.addEventListener("submit", () => {
-      if (modalElement.dataset.inventoryScanOpened === "true") {
-        window.sessionStorage.setItem(inventoryPageStateKey, "1");
-      }
-    });
-  });
-
   document.addEventListener("click", (event) => {
     const scanButton = event.target.closest(".barcode-scan-btn");
     const clearButton = event.target.closest(".barcode-clear-btn");
@@ -821,17 +812,21 @@
     }
   });
 
-  if (window.sessionStorage.getItem(inventoryPageStateKey) === "1" && inventoryBarcodeScanner.ready) {
-    window.sessionStorage.removeItem(inventoryPageStateKey);
-    window.setTimeout(() => {
-      inventoryBarcodeScanner.open({
-        title: "Scan Inventory Barcode",
-        onScan: (barcode) => {
-          handleInventoryBarcodeScan(barcode);
-        }
-      });
-    }, 250);
-  }
+  inventoryRegisterProductButton?.addEventListener("click", () => {
+    if (!addItemModal || !addItemForm || !addItemBarcode) return;
+    addItemForm.reset();
+    addItemBarcode.value = pendingRegistrationBarcode;
+    inventoryRegisterProductModal.addEventListener("hidden.bs.modal", () => {
+      bootstrap.Modal.getOrCreateInstance(addItemModal).show();
+      addItemBarcode.focus();
+    }, { once: true });
+    bootstrap.Modal.getOrCreateInstance(inventoryRegisterProductModal).hide();
+    pendingRegistrationBarcode = "";
+  });
+
+  inventoryRegisterProductModal?.addEventListener("hidden.bs.modal", () => {
+    pendingRegistrationBarcode = "";
+  });
 
   if (inventorySearch && inventoryStatus && inventoryTableBody) loadInventoryResults();
 </script>

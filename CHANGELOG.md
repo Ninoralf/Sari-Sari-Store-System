@@ -2,7 +2,17 @@
 
 All notable changes to the Sari-Sari Store Management System are documented here.
 
-This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.10.1`.
+This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.11.1`.
+
+## [1.11.1] - 2026-07-29
+
+### Changed
+- Simplified Inventory barcode scanning into a search shortcut: completed scans populate the existing Inventory search field, apply its normal filters, and leave matching products visible in the results.
+- Inventory scans no longer open the Edit Product dialog, focus the selling price, or resume scanning after an item update; products are edited only through their existing Edit action.
+
+### Added
+- When a scanned barcode has no exact product match, Inventory now shows a Product not found confirmation dialog.
+- Choosing Register Product opens the existing Add Item dialog with the scanned barcode filled in and all other fields cleared for entry.
 
 ## [1.11.0] - 2026-07-27
 
