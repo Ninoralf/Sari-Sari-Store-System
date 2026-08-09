@@ -10,21 +10,12 @@
       <div class="d-flex flex-column h-100">
         <!-- Search & Filter Bar -->
         <div class="content-card p-3 mb-4">
-          <!-- Search Row -->
-          <div class="mb-3">
-            <div class="input-group search-glass">
-              <span class="input-group-text border-0 bg-transparent ps-3"><i class="bi bi-search text-muted"></i></span>
-              <input class="form-control border-0 bg-transparent py-2" id="quickItemSearch" placeholder="Search product or category..." autocomplete="off">
-            </div>
-          </div>
-
-          <div class="sales-barcode-panel mb-3">
-            <div class="input-group search-glass">
-              <span class="input-group-text border-0 bg-transparent ps-3"><i class="bi bi-upc-scan text-muted"></i></span>
-              <input class="form-control border-0 bg-transparent py-2" id="salesBarcodeInput" placeholder="Scan or type barcode, then press Enter" autocomplete="off">
-            </div>
-            <button class="btn btn-success btn-lg sales-scan-button" type="button" id="salesScanProductButton">
-              <i class="bi bi-camera me-2"></i>Scan Product
+          <!-- Unified product search and barcode entry -->
+          <div class="input-group search-glass mb-3">
+            <span class="input-group-text border-0 bg-transparent ps-3"><i class="bi bi-search text-muted"></i></span>
+            <input class="form-control border-0 bg-transparent py-2" id="quickItemSearch" placeholder="Search product, category, or scan barcode..." autocomplete="off">
+            <button class="btn btn-success rounded-3 me-1" type="button" id="salesScanProductButton" aria-label="Scan product barcode" title="Scan product barcode">
+              <i class="bi bi-camera"></i>
             </button>
           </div>
           
@@ -124,7 +115,6 @@
   const inventoryItems = <%- JSON.stringify(inventory) %>;
   const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
   const searchInput = document.getElementById("quickItemSearch");
-  const salesBarcodeInput = document.getElementById("salesBarcodeInput");
   const salesScanProductButton = document.getElementById("salesScanProductButton");
   const suggestions = document.getElementById("quickSuggestions");
   const emptySearchState = document.getElementById("emptySearchState");
@@ -220,26 +210,51 @@
     return payload.item || null;
   }
 
+  function addResolvedBarcodeItem(item) {
+    if (!item || item.status === "Out of Stock") {
+      showSalesAlert("warning", "Product not found.");
+      return;
+    }
+
+    if (!inventoryItems.some(entry => entry.id === item.id)) {
+      inventoryItems.push(item);
+    }
+    addItemToCart(item.id, 1);
+    searchInput.value = "";
+    setCartOpen(true);
+  }
+
   async function addBarcodeToCart(barcode) {
     const normalizedBarcode = String(barcode || "").trim();
     if (!normalizedBarcode) return;
 
     try {
       const item = await findInventoryItemByBarcode(normalizedBarcode);
-      if (!item || item.status === "Out of Stock") {
-        showSalesAlert("warning", "Product not found.");
-        return;
-      }
-
-      if (!inventoryItems.some(entry => entry.id === item.id)) {
-        inventoryItems.push(item);
-      }
-      addItemToCart(item.id, 1);
-      salesBarcodeInput.value = "";
-      setCartOpen(true);
+      addResolvedBarcodeItem(item);
     } catch (error) {
       showSalesAlert("danger", error.message || "Unable to search barcode.");
     }
+  }
+
+  async function handleUnifiedSearchSubmit() {
+    const query = searchInput.value.trim();
+    if (!query) {
+      renderSuggestions();
+      return;
+    }
+
+    try {
+      const item = await findInventoryItemByBarcode(query);
+      if (item) {
+        addResolvedBarcodeItem(item);
+        return;
+      }
+    } catch (error) {
+      showSalesAlert("danger", error.message || "Unable to search barcode.");
+      return;
+    }
+
+    renderSuggestions();
   }
 
   function renderSuggestions() {
@@ -377,6 +392,11 @@
 
   // Event Listeners
   searchInput.addEventListener("input", renderSuggestions);
+  searchInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    handleUnifiedSearchSubmit();
+  });
   const salesBarcodeScanner = new BarcodeScanner({ modalId: "salesBarcodeScannerModal" });
 
   if (salesScanProductButton) {
@@ -384,18 +404,10 @@
       salesBarcodeScanner.open({
         title: "Scan Product Barcode",
         onScan: (barcode) => {
-          salesBarcodeInput.value = barcode;
+          searchInput.value = barcode;
           addBarcodeToCart(barcode);
         }
       });
-    });
-  }
-
-  if (salesBarcodeInput) {
-    salesBarcodeInput.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter") return;
-      event.preventDefault();
-      addBarcodeToCart(salesBarcodeInput.value);
     });
   }
 

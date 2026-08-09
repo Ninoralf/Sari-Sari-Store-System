@@ -184,7 +184,26 @@
   <script>
     window.addEventListener("DOMContentLoaded", () => {
       const element = document.getElementById("trustedDeviceSetupModal");
-      if (element && window.bootstrap) window.bootstrap.Modal.getOrCreateInstance(element).show();
+      if (!element || !window.bootstrap) return;
+
+      const quickLogin = window.bootstrap.Modal.getOrCreateInstance(element);
+      const versionNotice = document.getElementById("whatsNewModal");
+      const showQuickLogin = () => quickLogin.show();
+
+      if (versionNotice && versionNotice.classList.contains("show")) {
+        versionNotice.dataset.reopenAfterQuickLogin = "true";
+        const version = window.bootstrap.Modal.getOrCreateInstance(versionNotice);
+        versionNotice.addEventListener("hidden.bs.modal", showQuickLogin, { once: true });
+        version.hide();
+      } else {
+        showQuickLogin();
+      }
+
+      element.addEventListener("hidden.bs.modal", () => {
+        if (!versionNotice?.dataset.reopenAfterQuickLogin) return;
+        delete versionNotice.dataset.reopenAfterQuickLogin;
+        window.bootstrap.Modal.getOrCreateInstance(versionNotice).show();
+      }, { once: true });
     });
   </script>
 <% } %>

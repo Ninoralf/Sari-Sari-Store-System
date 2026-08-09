@@ -1,10 +1,10 @@
 {
-  "version": "1.12.0",
+  "version": "1.13.0",
   "changes": [
-    "Added optional Trusted Device / Quick Login after a normal password sign-in, without extending the 30-minute application session.",
-    "Quick Login can restore a session automatically or require a 4-digit PIN, with a password sign-in fallback always available.",
-    "Accounts now allow one active trusted device at a time; replacing or removing a device securely revokes its old credential.",
-    "Added trusted-device status and PIN controls in Settings, plus administrator revocation controls in User Accounts.",
-    "Password resets, account deactivation, and device revocation now prevent affected devices from using Quick Login."
+    "Unified the POS product search and barcode entry into one responsive input for product names, categories, and physical barcode scanners.",
+    "Added the camera icon scanner action to the unified POS search while preserving the existing scanner modal and barcode lookup flow.",
+    "Fixed Version Notice and Trusted Device Quick Login modal sequencing so only one modal is active at a time.",
+    "Fixed modal layering so standard and scanner modals cover the floating cart control without changing the cart layout or behavior.",
+    "Improved the camera scanner modal for desktop, laptop, tablet, and narrow mobile viewports with constrained sizing and scrollable content."
   ]
 }

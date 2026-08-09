@@ -858,6 +858,15 @@ body .app-flash-popup.alert.show {
   box-shadow: var(--shadow-card);
 }
 
+/* Bootstrap modals must cover the page-level floating cart control. */
+.modal-backdrop {
+  z-index: 1070;
+}
+
+.modal {
+  z-index: 1075;
+}
+
 .whats-new-modal .modal-content {
   border-radius: 1rem;
   overflow: hidden;
@@ -2344,6 +2353,40 @@ body[data-theme="Dark Mode"] .btn-white {
   .sales-scan-button {
     width: 100%;
   }
+}
+
+/* Keep the scanner usable on short and narrow viewports without changing the
+   camera lifecycle or the shared scanner modal markup. */
+.barcode-scanner-modal .modal-dialog {
+  width: min(32rem, calc(100vw - 1rem));
+  max-width: calc(100vw - 1rem);
+  height: calc(100vh - 1rem);
+  max-height: calc(100vh - 1rem);
+  margin: 0.5rem auto;
+}
+
+.barcode-scanner-modal .modal-content {
+  display: flex;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.barcode-scanner-modal .modal-header,
+.barcode-scanner-modal .modal-footer {
+  flex: 0 0 auto;
+}
+
+.barcode-scanner-modal .modal-body {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.barcode-scanner-viewfinder {
+  min-height: 0;
+  height: auto;
+  max-height: min(55vh, 24rem);
 }
 
 /* On smaller screens, keep the existing table/card presentation and remove

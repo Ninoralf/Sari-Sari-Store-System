@@ -2,7 +2,21 @@
 
 All notable changes to the Sari-Sari Store Management System are documented here.
 
-This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.12.0`.
+This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.13.0`.
+
+## [1.13.0] - 2026-08-09
+
+### What's New
+- Unified POS product-name, category, and barcode entry into one responsive search field.
+- Added a compact camera icon action to the unified POS search field while reusing the existing camera scanner modal, barcode lookup, and cart-add behavior.
+
+### Changed
+- Version Notice and Trusted Device Quick Login now use queued modal sequencing so only one modal is active at a time.
+- Scanner modal layout now fits the viewport on desktop and narrow mobile screens, with responsive preview sizing and scrollable modal content.
+
+### Fixed
+- Raised the shared modal/backdrop layer above the page-level floating cart control so the cart remains covered when a modal opens.
+- Fixed scanner modal clipping affecting the right edge, supported barcode text, preview area, close button, and Cancel button.
 
 ## [1.12.0] - 2026-08-09
 

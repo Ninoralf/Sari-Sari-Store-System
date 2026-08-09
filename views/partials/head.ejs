@@ -92,6 +92,20 @@
         modalElement.removeAttribute("aria-hidden");
       }
 
+      function showOrQueueWhatsNewModal(release) {
+        const showVersionNotice = () => {
+          renderWhatsNewModal(release);
+          window.localStorage.setItem(lastSeenVersionKey, release.version);
+        };
+        const quickLoginModal = document.getElementById("trustedDeviceSetupModal");
+        if (!quickLoginModal) {
+          showVersionNotice();
+          return;
+        }
+
+        quickLoginModal.addEventListener("hidden.bs.modal", showVersionNotice, { once: true });
+      }
+
       async function checkForVersionUpdate() {
         try {
           const response = await fetch("/version.json", {
@@ -106,8 +120,7 @@
           const lastSeenVersion = window.localStorage.getItem(lastSeenVersionKey);
           if (lastSeenVersion === release.version) return;
 
-          renderWhatsNewModal(release);
-          window.localStorage.setItem(lastSeenVersionKey, release.version);
+          showOrQueueWhatsNewModal(release);
         } catch (error) {
           console.warn("Unable to check release notes.", error);
         }
