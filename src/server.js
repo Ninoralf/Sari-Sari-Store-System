@@ -7,7 +7,9 @@ import { fileURLToPath } from "node:url";
 import {
   addInventoryItem,
   clearFailedLoginAttempts,
+  clearTrustedDevicePinAttempts,
   completeDigitalServiceRequest,
+  createTrustedDeviceRegistration,
   createCategory,
   createEloadNetwork,
   createEloadPromo,
@@ -33,6 +35,9 @@ import {
   getStoreSettings,
   getEloadPromoCatalog,
   getLoginProtectionState,
+  getTrustedDeviceAuthByTokenHash,
+  getTrustedDevicePinProtectionState,
+  getTrustedDeviceStatusForUser,
   getUserAuthById,
   getUserAuthByUsername,
   listDigitalServiceRequests,
@@ -48,6 +53,9 @@ import {
   listSales,
   resetAllData,
   recordFailedLoginAttempt,
+  recordFailedTrustedDevicePinAttempt,
+  revokeTrustedDeviceForUser,
+  revokeTrustedDevicesForUser,
   deleteSupplier,
   updateUserAccount,
   updateUserPin,
@@ -59,7 +67,10 @@ import {
   updatePassword,
   updateSupplier,
   updateStoreSettings,
+  updateTrustedDevicePin,
   updateUserProfile,
+  hashPin,
+  touchTrustedDevice,
   verifyPin,
   verifyPassword,
   getInventorySummary
@@ -74,6 +85,8 @@ const app = express();
 const port = process.env.PORT || 3000;
 const sessionMaxAgeMs = 30 * 60 * 1000;
 const sessionCookieName = "store.sid";
+const trustedDeviceCookieName = "store.trusted_device";
+const trustedDeviceMaxAgeMs = 90 * 24 * 60 * 60 * 1000;
 const loginRateLimitMessage = "Too many failed sign-in attempts. Please wait a few minutes and try again.";
 
 const versionData = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "public", "version.json"), "utf8"));
@@ -136,12 +149,14 @@ function buildCsrfToken() {
   return crypto.randomBytes(32).toString("hex");
 }
 
-function setAuthSession(req, userId, mustChangePassword = false) {
+function setAuthSession(req, userId, mustChangePassword = false, trustedDeviceId = null) {
   req.session.user = { id: userId };
   req.session.authToken = crypto.randomBytes(24).toString("hex");
   req.session.authExpiresAt = Date.now() + sessionMaxAgeMs;
   req.session.csrfToken = buildCsrfToken();
   req.session.mustChangePassword = Boolean(mustChangePassword);
+  if (trustedDeviceId) req.session.trustedDeviceId = Number(trustedDeviceId);
+  else delete req.session.trustedDeviceId;
 }
 
 function clearAuthSession(req) {
@@ -150,6 +165,77 @@ function clearAuthSession(req) {
   delete req.session.authExpiresAt;
   delete req.session.csrfToken;
   delete req.session.mustChangePassword;
+  delete req.session.trustedDeviceId;
+}
+
+function trustedDeviceCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: trustedDeviceMaxAgeMs
+  };
+}
+
+function clearTrustedDeviceCookie(res) {
+  res.clearCookie(trustedDeviceCookieName, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production"
+  });
+}
+
+function readRequestCookie(req, cookieName) {
+  const header = String(req.headers.cookie || "");
+  for (const part of header.split(";")) {
+    const [rawName, ...rawValue] = part.trim().split("=");
+    if (rawName !== cookieName) continue;
+    try {
+      return decodeURIComponent(rawValue.join("="));
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+function hashTrustedDeviceToken(token) {
+  return crypto.createHash("sha256").update(String(token || "")).digest("hex");
+}
+
+function getTrustedDeviceFromRequest(req) {
+  const token = readRequestCookie(req, trustedDeviceCookieName);
+  if (!token || token.length < 32) return null;
+  return getTrustedDeviceAuthByTokenHash(hashTrustedDeviceToken(token));
+}
+
+function buildTrustedDeviceName(userAgent) {
+  const value = String(userAgent || "").toLowerCase();
+  const browser = value.includes("edg/") ? "Edge"
+    : value.includes("firefox/") ? "Firefox"
+      : value.includes("chrome/") || value.includes("crios/") ? "Chrome"
+        : value.includes("safari/") ? "Safari"
+          : "Browser";
+  const platform = value.includes("android") ? "Android"
+    : value.includes("iphone") || value.includes("ipad") ? "iOS"
+      : value.includes("windows") ? "Windows"
+        : value.includes("mac os") ? "macOS"
+          : value.includes("linux") ? "Linux"
+            : "this device";
+  return `${browser} on ${platform}`;
+}
+
+function isTrustedDevicePin(value) {
+  const pin = String(value || "").trim();
+  return /^\d{4}$/.test(pin) && !/^(\d)\1{3}$/.test(pin);
+}
+
+function restoreTrustedDeviceSession(req, res, device) {
+  return req.session.regenerate(() => {
+    setAuthSession(req, device.user_id, device.must_change_password, device.id);
+    touchTrustedDevice(device.id);
+    return req.session.save(() => res.redirect("/"));
+  });
 }
 
 function getLoginRateLimitKey(req) {
@@ -249,17 +335,31 @@ app.use((req, res, next) => {
   }
 
   if (isAuthenticated) {
+    const currentUser = getUserById(req.session.user.id);
+    if (!currentUser || !currentUser.is_active) {
+      clearAuthSession(req);
+      return req.session.save(() => {
+        res.clearCookie(sessionCookieName);
+        return res.redirect("/login");
+      });
+    }
+  }
+
+  if (isAuthenticated) {
     req.session.authExpiresAt = Date.now() + sessionMaxAgeMs;
   }
 
   res.locals.currentPath = req.path;
   res.locals.user = req.session.user ? getUserById(req.session.user.id) : null;
+  res.locals.trustedDevice = res.locals.user ? getTrustedDeviceStatusForUser(res.locals.user.id) : null;
   res.locals.store = storeSettings;
   res.locals.notifications = req.session.user ? buildNotifications(storeSettings, res.locals.user?.role) : [];
   res.locals.csrfToken = req.session.csrfToken;
   res.locals.quickSearch = req.path === "/inventory" ? String(req.query.search || "") : "";
   res.locals.quickSearchStatus = req.path === "/inventory" ? inventoryStatus : "all";
   res.locals.flash = req.session.flash || null;
+  res.locals.trustedDeviceSetupPending = Boolean(req.session.trustedDeviceSetupPending);
+  delete req.session.trustedDeviceSetupPending;
   res.locals.version = systemVersion;
   res.locals.appearance = {
     theme: "Light Mode",
@@ -314,12 +414,23 @@ function requireAuth(req, res, next) {
     res.clearCookie(sessionCookieName);
     return res.redirect("/login");
   }
+  const currentUser = getUserById(req.session.user.id);
+  if (!currentUser || !currentUser.is_active) {
+    clearAuthSession(req);
+    res.clearCookie(sessionCookieName);
+    return res.redirect("/login");
+  }
   return next();
 }
 
 function requireApiAuth(req, res, next) {
   if (!req.session.user || !req.session.authToken) {
     sendNoStore(res);
+    return res.status(401).json({ error: "Authentication required." });
+  }
+  const currentUser = getUserById(req.session.user.id);
+  if (!currentUser || !currentUser.is_active) {
+    clearAuthSession(req);
     return res.status(401).json({ error: "Authentication required." });
   }
   return next();
@@ -614,7 +725,22 @@ app.post("/api/sales", requireApiAuth, requireSalesApiAccess, (req, res) => {
 app.get("/login", (req, res) => {
   if (req.session.user) return res.redirect("/");
   sendNoStore(res);
-  return res.render("login", { pageTitle: "Login" });
+  const usePassword = String(req.query.password || "") === "1";
+  const trustedDeviceToken = readRequestCookie(req, trustedDeviceCookieName);
+  const trustedDevice = usePassword ? null : getTrustedDeviceFromRequest(req);
+
+  if (!usePassword && trustedDeviceToken && !trustedDevice) clearTrustedDeviceCookie(res);
+  if (trustedDevice && (!trustedDevice.is_active || trustedDevice.must_change_password)) {
+    clearTrustedDeviceCookie(res);
+  } else if (trustedDevice && !trustedDevice.pin_enabled) {
+    return restoreTrustedDeviceSession(req, res, trustedDevice);
+  }
+
+  return res.render("login", {
+    pageTitle: "Login",
+    quickLogin: trustedDevice?.pin_enabled ? { username: trustedDevice.username, fullName: trustedDevice.full_name } : null,
+    usePassword
+  });
 });
 
 app.post("/login", async (req, res) => {
@@ -629,7 +755,7 @@ app.post("/login", async (req, res) => {
   }
 
   const user = getUserAuthByUsername(username);
-  if (!user || !(await verifyPassword(password, user.password_hash))) {
+  if (!user || !user.is_active || !(await verifyPassword(password, user.password_hash))) {
     const failedState = recordFailedLoginAttempt(username, rateLimitKey);
     setFlash(req, "danger", (failedState.rateLimited || failedState.accountLocked) ? loginRateLimitMessage : "Invalid username or password.");
     return res.redirect("/login");
@@ -641,9 +767,34 @@ app.post("/login", async (req, res) => {
       setFlash(req, "warning", "Change the default admin password before continuing.");
       return req.session.save(() => res.redirect("/settings?tab=profile&forcePasswordChange=1"));
     }
+    req.session.trustedDeviceSetupPending = true;
     setFlash(req, "success", "Welcome back.");
     return req.session.save(() => res.redirect("/"));
   });
+});
+
+app.post("/login/quick-unlock", async (req, res) => {
+  const trustedDevice = getTrustedDeviceFromRequest(req);
+  if (!trustedDevice || !trustedDevice.pin_enabled || !trustedDevice.is_active || trustedDevice.must_change_password) {
+    clearTrustedDeviceCookie(res);
+    setFlash(req, "danger", "Quick login is unavailable. Please sign in with your password.");
+    return res.redirect("/login?password=1");
+  }
+
+  const protectionState = getTrustedDevicePinProtectionState(trustedDevice.id);
+  if (protectionState.locked) {
+    setFlash(req, "danger", "Too many unlock attempts. Please wait a few minutes and try again.");
+    return res.redirect("/login");
+  }
+
+  if (!(await verifyPin(String(req.body.pin || ""), trustedDevice.pin_hash))) {
+    const failedState = recordFailedTrustedDevicePinAttempt(trustedDevice.id);
+    setFlash(req, "danger", failedState.locked ? "Too many unlock attempts. Please wait a few minutes and try again." : "Unable to unlock. Please try again.");
+    return res.redirect("/login");
+  }
+
+  clearTrustedDevicePinAttempts(trustedDevice.id);
+  return restoreTrustedDeviceSession(req, res, trustedDevice);
 });
 
 app.post("/logout", requireAuth, (req, res) => {
@@ -653,6 +804,52 @@ app.post("/logout", requireAuth, (req, res) => {
     sendNoStore(res);
     return res.redirect("/login");
   });
+});
+
+app.post("/trusted-device/register", requireAuth, async (req, res) => {
+  const currentUser = getUserById(req.session.user.id);
+  if (!currentUser || !currentUser.is_active || currentUser.must_change_password) {
+    setFlash(req, "danger", "Update your password before enabling quick login.");
+    return res.redirect("/settings?tab=profile");
+  }
+
+  const pinEnabled = String(req.body.pinEnabled || "") === "1";
+  const pin = String(req.body.pin || "").trim();
+  const confirmPin = String(req.body.confirmPin || "").trim();
+  if (pinEnabled && (!isTrustedDevicePin(pin) || pin !== confirmPin)) {
+    setFlash(req, "danger", "Use a 4-digit PIN that is not made of repeated digits, and confirm it correctly.");
+    return res.redirect("/");
+  }
+
+  const token = crypto.randomBytes(32).toString("base64url");
+  try {
+    const deviceId = createTrustedDeviceRegistration({
+      userId: currentUser.id,
+      tokenHash: hashTrustedDeviceToken(token),
+      deviceName: buildTrustedDeviceName(req.get("user-agent")),
+      pinEnabled,
+      pinHash: pinEnabled ? await hashPin(pin) : "",
+      expiresAt: Date.now() + trustedDeviceMaxAgeMs,
+      replaceExisting: String(req.body.replaceExisting || "") === "1"
+    });
+    res.cookie(trustedDeviceCookieName, token, trustedDeviceCookieOptions());
+    req.session.trustedDeviceId = deviceId;
+    setFlash(req, "success", pinEnabled ? "This device is trusted and protected by a PIN." : "This device is trusted for quick login.");
+  } catch (error) {
+    setFlash(req, "danger", error.code === "TRUSTED_DEVICE_EXISTS" ? error.message : "Unable to register this device. Please try again.");
+  }
+  return res.redirect("/");
+});
+
+app.post("/trusted-device/remove", requireAuth, (req, res) => {
+  const trustedDevice = getTrustedDeviceFromRequest(req);
+  const registeredDevice = getTrustedDeviceStatusForUser(req.session.user.id);
+  const deviceId = Number(req.session.trustedDeviceId || trustedDevice?.id || registeredDevice?.id || 0);
+  if (deviceId) revokeTrustedDeviceForUser(req.session.user.id, deviceId);
+  delete req.session.trustedDeviceId;
+  clearTrustedDeviceCookie(res);
+  setFlash(req, "success", "Trusted device removed. Future sign-ins will require your password.");
+  return res.redirect("/settings?tab=profile");
 });
 
 app.get("/inventory", requireAuth, (req, res) => {
@@ -887,6 +1084,8 @@ app.get("/settings", requireAuth, (req, res) => {
     suppliers: isAdmin ? listSuppliers() : [],
     eloadNetworks: isAdmin ? listEloadNetworks() : [],
     productImportPreview: isAdmin ? req.session.productImportPreview || null : null,
+    trustedDevice: getTrustedDeviceStatusForUser(currentUser.id),
+    formatDateTime,
     activeTab: forcePasswordChange ? "profile" : activeTab,
     forcePasswordChange
   });
@@ -984,12 +1183,24 @@ app.post("/users/:id/update", requireAuth, requireAdmin, async (req, res) => {
       role,
       email,
       phone,
-      password
+      password,
+      isActive: req.body.isActive === undefined ? Boolean(targetUser.is_active) : Boolean(req.body.isActive)
     });
     setFlash(req, "success", "User account updated.");
   } catch (error) {
     setFlash(req, "danger", error.message);
   }
+  return res.redirect("/users");
+});
+
+app.post("/users/:id/trusted-device/revoke", requireAuth, requireAdmin, (req, res) => {
+  const targetUserId = Number(req.params.id);
+  const targetUser = getUserById(targetUserId);
+  if (!targetUser || !revokeTrustedDeviceForUser(targetUserId, Number(req.body.deviceId))) {
+    setFlash(req, "danger", "Trusted device not found or already revoked.");
+    return res.redirect("/users");
+  }
+  setFlash(req, "success", `Trusted device revoked for ${targetUser.full_name}.`);
   return res.redirect("/users");
 });
 
@@ -1007,6 +1218,33 @@ app.post("/settings/password", requireAuth, async (req, res) => {
   req.session.mustChangePassword = false;
   setFlash(req, "success", "Password changed successfully.");
   return res.redirect("/settings");
+});
+
+app.post("/trusted-device/pin", requireAuth, async (req, res) => {
+  const trustedDevice = getTrustedDeviceStatusForUser(req.session.user.id);
+  if (!trustedDevice) {
+    setFlash(req, "danger", "Register this browser as a trusted device before managing its PIN.");
+    return res.redirect("/settings?tab=profile");
+  }
+
+  const pinEnabled = String(req.body.pinEnabled || "") === "1";
+  const pin = String(req.body.pin || "").trim();
+  const confirmPin = String(req.body.confirmPin || "").trim();
+  if (pinEnabled && (!isTrustedDevicePin(pin) || pin !== confirmPin)) {
+    setFlash(req, "danger", "Use a 4-digit PIN that is not made of repeated digits, and confirm it correctly.");
+    return res.redirect("/settings?tab=profile");
+  }
+
+  const updated = updateTrustedDevicePin(
+    trustedDevice.id,
+    req.session.user.id,
+    pinEnabled,
+    pinEnabled ? await hashPin(pin) : ""
+  );
+  setFlash(req, updated
+    ? (pinEnabled ? "Quick-login PIN updated." : "Quick-login PIN disabled.")
+    : "Unable to update the quick-login PIN.");
+  return res.redirect("/settings?tab=profile");
 });
 
 app.post("/settings/pin", requireAuth, async (req, res) => {

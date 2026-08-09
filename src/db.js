@@ -29,6 +29,9 @@ const LOGIN_RATE_LIMIT_BLOCK_MS = 10 * 60 * 1000;
 const LOGIN_ACCOUNT_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_ACCOUNT_MAX_ATTEMPTS = 5;
 const LOGIN_ACCOUNT_LOCK_MS = 15 * 60 * 1000;
+const TRUSTED_DEVICE_PIN_WINDOW_MS = 15 * 60 * 1000;
+const TRUSTED_DEVICE_PIN_MAX_ATTEMPTS = 5;
+const TRUSTED_DEVICE_PIN_LOCK_MS = 15 * 60 * 1000;
 
 function padNumber(value) {
   return String(value).padStart(2, "0");
@@ -124,7 +127,8 @@ function createSchema() {
       phone TEXT NOT NULL,
       password_hash TEXT NOT NULL,
       pin_hash TEXT NOT NULL DEFAULT '',
-      must_change_password INTEGER NOT NULL DEFAULT 0
+      must_change_password INTEGER NOT NULL DEFAULT 0,
+      is_active INTEGER NOT NULL DEFAULT 1
     );
     CREATE TABLE IF NOT EXISTS inventory_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -339,7 +343,12 @@ function ensureUserSchema() {
   const columns = db.prepare("PRAGMA table_info(users)").all();
   const columnNames = new Set(columns.map((column) => column.name));
   const requiresRebuild = columnNames.has("plain_password") || !columnNames.has("must_change_password");
-  if (!requiresRebuild) return;
+  if (!requiresRebuild) {
+    if (!columnNames.has("is_active")) {
+      db.exec("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1");
+    }
+    return;
+  }
 
   const existingUsers = db.prepare("SELECT * FROM users ORDER BY id").all();
 
@@ -356,12 +365,13 @@ function ensureUserSchema() {
         phone TEXT NOT NULL,
         password_hash TEXT NOT NULL,
         pin_hash TEXT NOT NULL DEFAULT '',
-        must_change_password INTEGER NOT NULL DEFAULT 0
+        must_change_password INTEGER NOT NULL DEFAULT 0,
+        is_active INTEGER NOT NULL DEFAULT 1
       );
     `);
     const insertUser = db.prepare(`
-      INSERT INTO users_new (id, username, full_name, role, email, phone, password_hash, pin_hash, must_change_password)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO users_new (id, username, full_name, role, email, phone, password_hash, pin_hash, must_change_password, is_active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const user of existingUsers) {
@@ -381,7 +391,8 @@ function ensureUserSchema() {
         user.phone,
         isBcryptHash(passwordHash) ? passwordHash : bcrypt.hashSync(crypto.randomUUID(), 12),
         String(user.pin_hash || ""),
-        mustChangePassword ? 1 : 0
+        mustChangePassword ? 1 : 0,
+        columnNames.has("is_active") ? (Number(user.is_active) ? 1 : 0) : 1
       );
     }
 
@@ -529,6 +540,35 @@ function ensureAuthSecuritySchema() {
       window_started_at INTEGER NOT NULL,
       blocked_until INTEGER
     );
+  `);
+}
+
+function ensureTrustedDeviceSchema() {
+  const now = Date.now();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_devices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      device_token_hash TEXT NOT NULL UNIQUE,
+      device_name TEXT NOT NULL,
+      pin_enabled INTEGER NOT NULL DEFAULT 0,
+      pin_hash TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL,
+      last_used_at INTEGER,
+      expires_at INTEGER NOT NULL,
+      revoked_at INTEGER,
+      pin_failed_attempts INTEGER NOT NULL DEFAULT 0,
+      pin_first_failed_at INTEGER,
+      pin_locked_until INTEGER,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+  `);
+  db.prepare("UPDATE user_devices SET revoked_at = expires_at WHERE revoked_at IS NULL AND expires_at <= ?").run(now);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_user_devices_lookup ON user_devices(device_token_hash);
+    CREATE INDEX IF NOT EXISTS idx_user_devices_user_active ON user_devices(user_id, last_used_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_user_devices_one_active_per_user
+      ON user_devices(user_id) WHERE revoked_at IS NULL;
   `);
 }
 
@@ -876,25 +916,26 @@ export async function initializeDatabase() {
   ensureSalesSchema();
   ensureDigitalServiceRequestSchema();
   ensureAuthSecuritySchema();
+  ensureTrustedDeviceSchema();
   ensureReportingViews();
   await seedDefaults();
   seedEloadSettings();
 }
 
 export function getUserByUsername(username) {
-  return db.prepare("SELECT id, username, full_name, role, email, phone, must_change_password FROM users WHERE username = ?").get(username);
+  return db.prepare("SELECT id, username, full_name, role, email, phone, must_change_password, is_active FROM users WHERE username = ?").get(username);
 }
 
 export function getUserById(id) {
-  return db.prepare("SELECT id, username, full_name, role, email, phone, must_change_password FROM users WHERE id = ?").get(id);
+  return db.prepare("SELECT id, username, full_name, role, email, phone, must_change_password, is_active FROM users WHERE id = ?").get(id);
 }
 
 export function getUserAuthByUsername(username) {
-  return db.prepare("SELECT id, username, full_name, role, email, phone, password_hash, pin_hash, must_change_password FROM users WHERE username = ?").get(username);
+  return db.prepare("SELECT id, username, full_name, role, email, phone, password_hash, pin_hash, must_change_password, is_active FROM users WHERE username = ?").get(username);
 }
 
 export function getUserAuthById(id) {
-  return db.prepare("SELECT id, username, full_name, role, email, phone, password_hash, pin_hash, must_change_password FROM users WHERE id = ?").get(id);
+  return db.prepare("SELECT id, username, full_name, role, email, phone, password_hash, pin_hash, must_change_password, is_active FROM users WHERE id = ?").get(id);
 }
 
 function normalizeLoginIdentity(value) {
@@ -1023,8 +1064,180 @@ export function clearFailedLoginAttempts(username, rateLimitKey) {
   db.prepare("DELETE FROM login_rate_limits WHERE rate_key = ?").run(normalizedRateLimitKey);
 }
 
+function revokeExpiredTrustedDevices(now = Date.now()) {
+  db.prepare("UPDATE user_devices SET revoked_at = expires_at WHERE revoked_at IS NULL AND expires_at <= ?").run(now);
+}
+
+function activeTrustedDeviceForUser(userId, now = Date.now()) {
+  revokeExpiredTrustedDevices(now);
+  return db.prepare(`
+    SELECT id, user_id, device_name, pin_enabled, created_at, last_used_at, expires_at
+    FROM user_devices
+    WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?
+  `).get(userId, now);
+}
+
+export function getTrustedDeviceStatusForUser(userId, now = Date.now()) {
+  return activeTrustedDeviceForUser(userId, now) || null;
+}
+
+export function createTrustedDeviceRegistration({ userId, tokenHash, deviceName, pinEnabled, pinHash, expiresAt, replaceExisting = false }) {
+  const now = Date.now();
+  const normalizedTokenHash = String(tokenHash || "").trim();
+  const normalizedDeviceName = String(deviceName || "").trim();
+  if (!Number.isInteger(Number(userId)) || !normalizedTokenHash || !normalizedDeviceName || !Number.isFinite(Number(expiresAt))) {
+    throw new Error("Unable to register this device.");
+  }
+
+  db.exec("BEGIN");
+  try {
+    const existingDevice = activeTrustedDeviceForUser(Number(userId), now);
+    if (existingDevice && !replaceExisting) {
+      const error = new Error("This account already has a trusted device. Confirm replacement to continue.");
+      error.code = "TRUSTED_DEVICE_EXISTS";
+      throw error;
+    }
+    if (existingDevice) {
+      db.prepare("UPDATE user_devices SET revoked_at = ? WHERE id = ?").run(now, existingDevice.id);
+    }
+
+    const result = db.prepare(`
+      INSERT INTO user_devices
+        (user_id, device_token_hash, device_name, pin_enabled, pin_hash, created_at, last_used_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      Number(userId),
+      normalizedTokenHash,
+      normalizedDeviceName,
+      pinEnabled ? 1 : 0,
+      pinEnabled ? String(pinHash || "") : "",
+      now,
+      now,
+      Number(expiresAt)
+    );
+    db.exec("COMMIT");
+    return Number(result.lastInsertRowid);
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+export function getTrustedDeviceAuthByTokenHash(tokenHash, now = Date.now()) {
+  const normalizedTokenHash = String(tokenHash || "").trim();
+  if (!normalizedTokenHash) return null;
+  db.prepare(`
+    UPDATE user_devices
+    SET revoked_at = expires_at
+    WHERE device_token_hash = ? AND revoked_at IS NULL AND expires_at <= ?
+  `).run(normalizedTokenHash, now);
+  return db.prepare(`
+    SELECT
+      d.id, d.user_id, d.device_name, d.pin_enabled, d.pin_hash, d.created_at, d.last_used_at, d.expires_at,
+      d.pin_failed_attempts, d.pin_first_failed_at, d.pin_locked_until,
+      u.username, u.full_name, u.role, u.must_change_password, u.is_active
+    FROM user_devices d
+    INNER JOIN users u ON u.id = d.user_id
+    WHERE d.device_token_hash = ? AND d.revoked_at IS NULL AND d.expires_at > ?
+  `).get(normalizedTokenHash, now) || null;
+}
+
+export function touchTrustedDevice(deviceId, now = Date.now()) {
+  db.prepare("UPDATE user_devices SET last_used_at = ? WHERE id = ? AND revoked_at IS NULL AND expires_at > ?")
+    .run(now, Number(deviceId), now);
+}
+
+export function getTrustedDevicePinProtectionState(deviceId, now = Date.now()) {
+  const device = db.prepare(`
+    SELECT pin_failed_attempts, pin_first_failed_at, pin_locked_until
+    FROM user_devices
+    WHERE id = ? AND revoked_at IS NULL AND expires_at > ?
+  `).get(Number(deviceId), now);
+  if (!device) return { locked: true, lockedUntil: now };
+
+  const lockedUntil = Number(device.pin_locked_until || 0);
+  const firstFailedAt = Number(device.pin_first_failed_at || 0);
+  if ((lockedUntil && lockedUntil <= now) || (!lockedUntil && firstFailedAt && now - firstFailedAt > TRUSTED_DEVICE_PIN_WINDOW_MS)) {
+    db.prepare(`
+      UPDATE user_devices
+      SET pin_failed_attempts = 0, pin_first_failed_at = NULL, pin_locked_until = NULL
+      WHERE id = ?
+    `).run(Number(deviceId));
+    return { locked: false, lockedUntil: 0 };
+  }
+
+  return { locked: Boolean(lockedUntil && lockedUntil > now), lockedUntil };
+}
+
+export function recordFailedTrustedDevicePinAttempt(deviceId, now = Date.now()) {
+  const device = db.prepare(`
+    SELECT pin_failed_attempts, pin_first_failed_at, pin_locked_until
+    FROM user_devices
+    WHERE id = ? AND revoked_at IS NULL AND expires_at > ?
+  `).get(Number(deviceId), now);
+  if (!device) return { locked: true, lockedUntil: now };
+
+  const existingLockedUntil = Number(device.pin_locked_until || 0);
+  if (existingLockedUntil > now) return { locked: true, lockedUntil: existingLockedUntil };
+
+  const existingFirstFailedAt = Number(device.pin_first_failed_at || 0);
+  const insideWindow = existingFirstFailedAt && now - existingFirstFailedAt <= TRUSTED_DEVICE_PIN_WINDOW_MS;
+  const failedAttempts = insideWindow ? Number(device.pin_failed_attempts || 0) + 1 : 1;
+  const firstFailedAt = insideWindow ? existingFirstFailedAt : now;
+  const lockedUntil = failedAttempts >= TRUSTED_DEVICE_PIN_MAX_ATTEMPTS ? now + TRUSTED_DEVICE_PIN_LOCK_MS : 0;
+  db.prepare(`
+    UPDATE user_devices
+    SET pin_failed_attempts = ?, pin_first_failed_at = ?, pin_locked_until = ?
+    WHERE id = ?
+  `).run(failedAttempts, firstFailedAt, lockedUntil || null, Number(deviceId));
+  return { locked: Boolean(lockedUntil), lockedUntil };
+}
+
+export function clearTrustedDevicePinAttempts(deviceId) {
+  db.prepare(`
+    UPDATE user_devices
+    SET pin_failed_attempts = 0, pin_first_failed_at = NULL, pin_locked_until = NULL
+    WHERE id = ?
+  `).run(Number(deviceId));
+}
+
+export function updateTrustedDevicePin(deviceId, userId, pinEnabled, pinHash = "") {
+  const result = db.prepare(`
+    UPDATE user_devices
+    SET pin_enabled = ?, pin_hash = ?, pin_failed_attempts = 0, pin_first_failed_at = NULL, pin_locked_until = NULL
+    WHERE id = ? AND user_id = ? AND revoked_at IS NULL AND expires_at > ?
+  `).run(pinEnabled ? 1 : 0, pinEnabled ? String(pinHash || "") : "", Number(deviceId), Number(userId), Date.now());
+  return Number(result.changes || 0) > 0;
+}
+
+export function revokeTrustedDevice(deviceId, now = Date.now()) {
+  const result = db.prepare("UPDATE user_devices SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").run(now, Number(deviceId));
+  return Number(result.changes || 0) > 0;
+}
+
+export function revokeTrustedDeviceForUser(userId, deviceId, now = Date.now()) {
+  const result = db.prepare(`
+    UPDATE user_devices SET revoked_at = ?
+    WHERE id = ? AND user_id = ? AND revoked_at IS NULL
+  `).run(now, Number(deviceId), Number(userId));
+  return Number(result.changes || 0) > 0;
+}
+
+export function revokeTrustedDevicesForUser(userId, now = Date.now()) {
+  db.prepare("UPDATE user_devices SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL")
+    .run(now, Number(userId));
+}
+
 export function listUsers() {
-  return db.prepare("SELECT id, username, full_name, role, email, phone, must_change_password FROM users ORDER BY full_name, username").all();
+  return db.prepare(`
+    SELECT
+      u.id, u.username, u.full_name, u.role, u.email, u.phone, u.must_change_password, u.is_active,
+      d.id AS trusted_device_id, d.device_name AS trusted_device_name,
+      d.created_at AS trusted_device_created_at, d.last_used_at AS trusted_device_last_used_at
+    FROM users u
+    LEFT JOIN user_devices d ON d.user_id = u.id AND d.revoked_at IS NULL AND d.expires_at > ?
+    ORDER BY u.full_name, u.username
+  `).all(Date.now());
 }
 
 export function listSuppliers() {
@@ -1238,11 +1451,14 @@ export async function createUserAccount(input) {
 }
 
 export async function updateUserAccount(userId, input) {
+  const isActive = input.isActive ? 1 : 0;
   db.prepare(`
     UPDATE users
-    SET username = ?, full_name = ?, role = ?, email = ?, phone = ?
+    SET username = ?, full_name = ?, role = ?, email = ?, phone = ?, is_active = ?
     WHERE id = ?
-  `).run(input.username, input.fullName, input.role, input.email, input.phone, userId);
+  `).run(input.username, input.fullName, input.role, input.email, input.phone, isActive, userId);
+
+  if (!isActive) revokeTrustedDevicesForUser(userId);
 
   if (input.password) {
     await updatePassword(userId, input.password);
@@ -1256,6 +1472,7 @@ export function updateUserPin(userId, newPin) {
 export async function updatePassword(userId, newPassword) {
   const passwordHash = await hashPassword(newPassword);
   db.prepare("UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?").run(passwordHash, userId);
+  revokeTrustedDevicesForUser(userId);
 }
 
 export function updateNotifications(input) {

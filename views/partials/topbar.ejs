@@ -99,6 +99,15 @@
                   <span>Logout</span>
                 </button>
               </form>
+              <% if (trustedDevice) { %>
+                <form method="post" action="/trusted-device/remove" class="m-0">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <button class="dropdown-item d-flex align-items-center gap-2 text-danger" type="submit" onclick="return confirm('Remove this trusted device? You will need your password for future sign-ins.');">
+                    <i class="bi bi-shield-x"></i>
+                    <span>Remove This Device</span>
+                  </button>
+                </form>
+              <% } %>
             </div>
           </div>
         <% } %>
@@ -130,6 +139,55 @@
     <span class="visually-hidden">Sales</span>
   </a>
 </nav>
+<% if (trustedDeviceSetupPending && user) { %>
+  <div class="modal fade" id="trustedDeviceSetupModal" tabindex="-1" aria-labelledby="trustedDeviceSetupTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0">
+        <form method="post" action="/trusted-device/register">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <div class="modal-header">
+            <div>
+              <div class="mini-note text-uppercase fw-bold">Quick Login</div>
+              <h2 class="modal-title h4 mb-0" id="trustedDeviceSetupTitle">Trust this device?</h2>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Not now"></button>
+          </div>
+          <div class="modal-body vstack gap-3">
+            <p class="text-secondary mb-0">After your normal session expires, this browser can sign you in again without entering your username and password.</p>
+            <% if (trustedDevice) { %>
+              <div class="alert alert-warning mb-0 small">
+                <strong><%= trustedDevice.device_name %></strong> is already trusted for this account. Enabling this browser will replace it.
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="replaceExisting" value="1" id="replaceTrustedDevice" required>
+                <label class="form-check-label" for="replaceTrustedDevice">Replace the existing trusted device</label>
+              </div>
+            <% } %>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" name="pinEnabled" value="1" id="trustedDevicePinEnabled">
+              <label class="form-check-label" for="trustedDevicePinEnabled">Protect quick login with a 4-digit PIN</label>
+            </div>
+            <div class="row g-2">
+              <div class="col-md-6"><label class="form-label" for="trustedDevicePin">PIN</label><input class="form-control" id="trustedDevicePin" type="password" name="pin" inputmode="numeric" pattern="\d{4}" maxlength="4" autocomplete="new-password"></div>
+              <div class="col-md-6"><label class="form-label" for="trustedDeviceConfirmPin">Confirm PIN</label><input class="form-control" id="trustedDeviceConfirmPin" type="password" name="confirmPin" inputmode="numeric" pattern="\d{4}" maxlength="4" autocomplete="new-password"></div>
+            </div>
+            <p class="mini-note mb-0">Do not use a PIN with four repeated digits.</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Not now</button>
+            <button class="btn btn-success" type="submit">Enable Quick Login</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <script>
+    window.addEventListener("DOMContentLoaded", () => {
+      const element = document.getElementById("trustedDeviceSetupModal");
+      if (element && window.bootstrap) window.bootstrap.Modal.getOrCreateInstance(element).show();
+    });
+  </script>
+<% } %>
 <script>
   window.addEventListener("load", () => {
     document.querySelectorAll(".notification-dropdown").forEach((dropdownElement) => {

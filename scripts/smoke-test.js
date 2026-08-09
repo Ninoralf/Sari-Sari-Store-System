@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -54,14 +55,37 @@ async function waitForServer() {
   throw new Error(`Server did not become ready.\n${startupOutput}`);
 }
 
-function extractCookie(response) {
-  const setCookie = response.headers.get("set-cookie");
-  return setCookie ? setCookie.split(";")[0] : "";
+function extractCookie(response, name = "store.sid") {
+  const setCookies = typeof response.headers.getSetCookie === "function"
+    ? response.headers.getSetCookie()
+    : [response.headers.get("set-cookie") || ""];
+  const expression = new RegExp(`(?:^|[,\\s])${name.replace(".", "\\.")}=([^;]*)`);
+  for (const header of setCookies) {
+    const match = String(header).match(expression);
+    if (match) return `${name}=${match[1]}`;
+  }
+  return "";
 }
 
 function updateSessionCookie(response) {
   const cookie = extractCookie(response);
   if (cookie) sessionCookie = cookie;
+}
+
+async function requestWithCookie(requestPath, cookie, options = {}) {
+  const { headers: rawHeaders, ...fetchOptions } = options;
+  const headers = new Headers(rawHeaders || {});
+  if (cookie) headers.set("Cookie", cookie);
+  return fetch(`${baseUrl}${requestPath}`, { redirect: "manual", ...fetchOptions, headers });
+}
+
+function getTrustedDeviceRow() {
+  const database = new DatabaseSync(smokeDbPath);
+  try {
+    return database.prepare("SELECT * FROM user_devices ORDER BY id DESC LIMIT 1").get();
+  } finally {
+    database.close();
+  }
 }
 
 function extractCsrfToken(html) {
@@ -191,6 +215,207 @@ async function main() {
   if (!salesCsv.ok) {
     throw new Error(`/settings/export/sales.csv returned ${salesCsv.status}.`);
   }
+
+  const trustedDeviceCsrf = extractCsrfToken(await (await request("/settings?tab=profile")).text());
+  const trustedDeviceRegistration = await request("/trusted-device/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ _csrf: trustedDeviceCsrf, pinEnabled: "0" }).toString()
+  });
+  if (trustedDeviceRegistration.status !== 302 || trustedDeviceRegistration.headers.get("location") !== "/") {
+    throw new Error("Trusted-device registration did not return to the dashboard.");
+  }
+  const passwordlessTrustedCookie = extractCookie(trustedDeviceRegistration, "store.trusted_device");
+  if (!passwordlessTrustedCookie) throw new Error("Trusted-device registration did not issue a credential cookie.");
+
+  const passwordlessToken = decodeURIComponent(passwordlessTrustedCookie.split("=")[1]);
+  const passwordlessDevice = getTrustedDeviceRow();
+  const expectedTokenHash = crypto.createHash("sha256").update(passwordlessToken).digest("hex");
+  if (!passwordlessDevice || passwordlessDevice.device_token_hash !== expectedTokenHash || passwordlessDevice.device_token_hash === passwordlessToken) {
+    throw new Error("Trusted-device credential was not stored as a secure hash.");
+  }
+  if (passwordlessDevice.pin_hash) throw new Error("PIN-free trusted device unexpectedly stored a PIN.");
+
+  const logoutCsrf = extractCsrfToken(await (await request("/settings?tab=profile")).text());
+  const logoutResponse = await request("/logout", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ _csrf: logoutCsrf }).toString()
+  });
+  if (logoutResponse.status !== 302 || logoutResponse.headers.get("location") !== "/login") {
+    throw new Error("Logout did not return to the login page.");
+  }
+  sessionCookie = "";
+
+  const automaticQuickLogin = await requestWithCookie("/login", passwordlessTrustedCookie);
+  if (automaticQuickLogin.status !== 302 || automaticQuickLogin.headers.get("location") !== "/") {
+    throw new Error("PIN-free trusted device did not restore a normal session.");
+  }
+  updateSessionCookie(automaticQuickLogin);
+  if (!sessionCookie || !(await request("/")).ok) throw new Error("Quick login did not produce an authenticated session.");
+
+  const removeTrustedDeviceCsrf = extractCsrfToken(await (await request("/settings?tab=profile")).text());
+  const removeTrustedDevice = await request("/trusted-device/remove", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ _csrf: removeTrustedDeviceCsrf }).toString()
+  });
+  if (removeTrustedDevice.status !== 302) throw new Error("Trusted-device removal failed.");
+
+  const pinTrustedDeviceCsrf = extractCsrfToken(await (await request("/settings?tab=profile")).text());
+  const pinTrustedDeviceRegistration = await request("/trusted-device/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ _csrf: pinTrustedDeviceCsrf, pinEnabled: "1", pin: "2468", confirmPin: "2468" }).toString()
+  });
+  const pinTrustedCookie = extractCookie(pinTrustedDeviceRegistration, "store.trusted_device");
+  const pinTrustedDevice = getTrustedDeviceRow();
+  if (!pinTrustedCookie || !pinTrustedDevice?.pin_hash || pinTrustedDevice.pin_hash === "2468") {
+    throw new Error("PIN-protected trusted device did not securely store its PIN.");
+  }
+
+  const pinLogoutCsrf = extractCsrfToken(await (await request("/settings?tab=profile")).text());
+  await request("/logout", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ _csrf: pinLogoutCsrf }).toString()
+  });
+  sessionCookie = "";
+
+  const quickUnlockPage = await requestWithCookie("/login", pinTrustedCookie);
+  const quickUnlockHtml = await quickUnlockPage.text();
+  if (!quickUnlockPage.ok || !quickUnlockHtml.includes("Use password instead")) {
+    throw new Error("PIN-protected trusted device did not show quick unlock with password fallback.");
+  }
+  const quickUnlockCsrf = extractCsrfToken(quickUnlockHtml);
+  const quickUnlockSession = extractCookie(quickUnlockPage);
+  const quickUnlockCookies = [quickUnlockSession, pinTrustedCookie].filter(Boolean).join("; ");
+
+  const wrongPinResponse = await requestWithCookie("/login/quick-unlock", quickUnlockCookies, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ _csrf: quickUnlockCsrf, pin: "0000" }).toString()
+  });
+  if (wrongPinResponse.status !== 302 || wrongPinResponse.headers.get("location") !== "/login") {
+    throw new Error("Incorrect quick-login PIN was not rejected.");
+  }
+
+  const correctPinResponse = await requestWithCookie("/login/quick-unlock", quickUnlockCookies, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ _csrf: quickUnlockCsrf, pin: "2468" }).toString()
+  });
+  if (correctPinResponse.status !== 302 || correctPinResponse.headers.get("location") !== "/") {
+    throw new Error("Correct quick-login PIN did not restore a normal session.");
+  }
+  updateSessionCookie(correctPinResponse);
+
+  const passwordFallbackPage = await requestWithCookie("/login?password=1", pinTrustedCookie);
+  const passwordFallbackHtml = await passwordFallbackPage.text();
+  if (!passwordFallbackPage.ok || !passwordFallbackHtml.includes('name="password"')) {
+    throw new Error("Password fallback was not available for trusted-device login.");
+  }
+
+  const replaceCsrf = extractCsrfToken(await (await request("/settings?tab=profile")).text());
+  const replacementRegistration = await request("/trusted-device/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ _csrf: replaceCsrf, pinEnabled: "0", replaceExisting: "1" }).toString()
+  });
+  const replacementTrustedCookie = extractCookie(replacementRegistration, "store.trusted_device");
+  if (!replacementTrustedCookie) throw new Error("Trusted-device replacement did not issue a new credential.");
+  const replacedCredentialLogin = await requestWithCookie("/login", pinTrustedCookie);
+  if (replacedCredentialLogin.status !== 200) {
+    throw new Error("Replaced trusted-device credential was still accepted.");
+  }
+
+  const activeDevice = getTrustedDeviceRow();
+  const revokeCsrf = extractCsrfToken(await (await request("/settings?tab=profile")).text());
+  const revokeResponse = await request(`/users/1/trusted-device/revoke`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ _csrf: revokeCsrf, deviceId: String(activeDevice.id) }).toString()
+  });
+  if (revokeResponse.status !== 302) throw new Error("Admin trusted-device revocation failed.");
+  const revokedCredentialLogin = await requestWithCookie("/login", replacementTrustedCookie);
+  if (revokedCredentialLogin.status !== 200) {
+    throw new Error("Revoked trusted-device credential was still accepted.");
+  }
+
+  const createUserCsrf = extractCsrfToken(await (await request("/settings?tab=profile")).text());
+  const quickLoginUsername = `quick-user-${crypto.randomUUID().slice(0, 8)}`;
+  const quickLoginPassword = "QuickLoginPass123!";
+  const createUserResponse = await request("/users/add", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      _csrf: createUserCsrf,
+      username: quickLoginUsername,
+      fullName: "Quick Login User",
+      role: "User",
+      email: `${quickLoginUsername}@example.test`,
+      phone: "09123456789",
+      password: quickLoginPassword
+    }).toString()
+  });
+  if (createUserResponse.status !== 302) throw new Error("Smoke-test user could not be created.");
+
+  const userLoginPage = await requestWithCookie("/login?password=1", "");
+  const userLoginCsrf = extractCsrfToken(await userLoginPage.text());
+  const userGuestSession = extractCookie(userLoginPage);
+  const userLoginResponse = await requestWithCookie("/login", userGuestSession, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ _csrf: userLoginCsrf, username: quickLoginUsername, password: quickLoginPassword }).toString()
+  });
+  const userSession = extractCookie(userLoginResponse);
+  if (userLoginResponse.status !== 302 || !userSession) throw new Error("Normal User login failed.");
+
+  const userSettingsPage = await requestWithCookie("/settings?tab=profile", userSession);
+  const userDeviceCsrf = extractCsrfToken(await userSettingsPage.text());
+  const userDeviceSession = extractCookie(userSettingsPage) || userSession;
+  const userDeviceRegistration = await requestWithCookie("/trusted-device/register", userDeviceSession, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ _csrf: userDeviceCsrf, pinEnabled: "0" }).toString()
+  });
+  const userTrustedCookie = extractCookie(userDeviceRegistration, "store.trusted_device");
+  if (!userTrustedCookie) throw new Error("User trusted-device registration failed.");
+
+  const userLogoutPage = await requestWithCookie("/settings?tab=profile", userDeviceSession);
+  const userLogoutCsrf = extractCsrfToken(await userLogoutPage.text());
+  await requestWithCookie("/logout", userDeviceSession, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ _csrf: userLogoutCsrf }).toString()
+  });
+  const userQuickLogin = await requestWithCookie("/login", userTrustedCookie);
+  const userQuickSession = extractCookie(userQuickLogin);
+  if (userQuickLogin.status !== 302 || !userQuickSession) throw new Error("User trusted-device login failed.");
+  const userSalesPage = await requestWithCookie("/sales", userQuickSession);
+  const userAccountsPage = await requestWithCookie("/users", userQuickSession);
+  if (!userSalesPage.ok || userAccountsPage.status !== 302 || userAccountsPage.headers.get("location") !== "/") {
+    throw new Error("Trusted-device login did not preserve User role permissions.");
+  }
+
+  const database = new DatabaseSync(smokeDbPath);
+  try {
+    database.prepare("UPDATE users SET is_active = 0 WHERE username = ?").run(quickLoginUsername);
+  } finally {
+    database.close();
+  }
+  const inactiveQuickLogin = await requestWithCookie("/login", userTrustedCookie);
+  if (inactiveQuickLogin.status !== 200) throw new Error("Inactive user was allowed to quick-login.");
+
+  const deleteDatabase = new DatabaseSync(smokeDbPath);
+  try {
+    deleteDatabase.exec("PRAGMA foreign_keys = ON");
+    deleteDatabase.prepare("DELETE FROM users WHERE username = ?").run(quickLoginUsername);
+  } finally {
+    deleteDatabase.close();
+  }
+  const deletedQuickLogin = await requestWithCookie("/login", userTrustedCookie);
+  if (deletedQuickLogin.status !== 200) throw new Error("Deleted user was allowed to quick-login.");
 
   console.log("Smoke test passed.");
 }

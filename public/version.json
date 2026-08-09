@@ -1,10 +1,10 @@
 {
-  "version": "1.11.1",
+  "version": "1.12.0",
   "changes": [
-    "Inventory barcode scans now act as a search shortcut: matching products stay in the filtered results without opening the Edit Product dialog.",
-    "When a scanned barcode has no exact product match, Inventory now offers to register it and pre-fills only the Barcode field in the existing Add Item form.",
-    "Optimized the Inventory table for mobile and tablet screens without changing the desktop layout.",
-    "Mobile Inventory now combines stock status into the Price column below the selling price and cost.",
-    "Mobile Inventory action buttons are stacked vertically and column alignment, widths, and padding were tuned to avoid horizontal scrolling and clipped controls."
+    "Added optional Trusted Device / Quick Login after a normal password sign-in, without extending the 30-minute application session.",
+    "Quick Login can restore a session automatically or require a 4-digit PIN, with a password sign-in fallback always available.",
+    "Accounts now allow one active trusted device at a time; replacing or removing a device securely revokes its old credential.",
+    "Added trusted-device status and PIN controls in Settings, plus administrator revocation controls in User Accounts.",
+    "Password resets, account deactivation, and device revocation now prevent affected devices from using Quick Login."
   ]
 }

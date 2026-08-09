@@ -2,7 +2,21 @@
 
 All notable changes to the Sari-Sari Store Management System are documented here.
 
-This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.11.1`.
+This project does not currently use Git tags, so versions below are inferred from the Git commit history and the current `package.json` version. The current release is treated as `1.12.0`.
+
+## [1.12.0] - 2026-08-09
+
+### What's New
+- Added optional Trusted Device / Quick Login. After a successful username/password sign-in, users can register the current browser for quick session restoration without making the ordinary application session long-lived.
+- Trusted devices can either restore a session automatically or require a dedicated 4-digit PIN. The normal username/password form remains available as a fallback.
+- Added personal Trusted Device controls in Settings, including device status, PIN enable/change/disable, and removal.
+- Added administrator visibility and revocation controls for each account's active trusted device in User Accounts.
+
+### Security
+- Trusted-device credentials are generated from cryptographically secure random data, stored only as an HttpOnly cookie, and persisted only as a SHA-256 hash; raw credentials are never stored in SQLite.
+- Trusted-device PINs use bcrypt hashing and are protected by per-device failed-attempt limits and temporary lockout.
+- Enforced one active trusted device per account through transactional registration and a SQLite partial unique index. Explicit replacement revokes the prior device.
+- Password changes, account deactivation, expiration, removal, and administrator revocation invalidate affected trusted-device credentials. Quick login reuses the ordinary authorization and role checks.
 
 ## [1.11.1] - 2026-07-29
 
